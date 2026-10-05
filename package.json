@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
     "test:mutation": "pnpm --filter @revezo/domain test:mutation",
+    "test:perf": "vitest run packages/domain/test/performance-engine.test.ts apps/web/test/performance-queries-n1.test.ts",
     "typecheck": "pnpm exec turbo run typecheck",
     "lint": "pnpm exec turbo run lint",
     "db:generate": "pnpm --filter @revezo/db generate",

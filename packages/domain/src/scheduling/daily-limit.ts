@@ -3,6 +3,22 @@ import { UserAssignmentTime } from './conflict.js';
 export const MAX_DAILY_ASSIGNMENTS = 2;
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 
+const formattersCache = new Map<string, Intl.DateTimeFormat>();
+
+function getDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = formattersCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    formattersCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Retorna a data no formato YYYY-MM-DD considerando o fuso horário da igreja.
  */
@@ -12,15 +28,7 @@ export function getLocalDateString(date: Date | string, timeZone = DEFAULT_TIMEZ
     throw new Error('Data inválida para cálculo de limite diário');
   }
 
-  // Utiliza Intl.DateTimeFormat para obter os valores corretos no fuso horário
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  return formatter.format(d);
+  return getDateTimeFormatter(timeZone).format(d);
 }
 
 /**
