@@ -20,10 +20,23 @@ export function PushNotificationManager() {
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isIosPromptNeeded, setIsIosPromptNeeded] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'sucesso' | 'erro' | 'aviso'; text: string } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Detecta se é dispositivo iOS fora do modo PWA standalone
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as any).standalone === true;
+
+    if (isIOS && !isStandalone && !isCapacitorNative()) {
+      setIsIosPromptNeeded(true);
+    }
 
     if (isCapacitorNative()) {
       setIsSupported(true);
@@ -87,8 +100,8 @@ export function PushNotificationManager() {
     try {
       if (Notification.permission === 'denied') {
         setStatusMessage({
-          type: 'erro',
-          text: 'As notificações estão bloqueadas no seu navegador. Permita o envio nas configurações do site para ativar.',
+          type: 'aviso',
+          text: 'As notificações estão bloqueadas neste aparelho. Fique tranquilo(a): você continuará recebendo avisos de escala e lembretes normalmente por e-mail ou WhatsApp.',
         });
         setLoading(false);
         return;
@@ -98,7 +111,7 @@ export function PushNotificationManager() {
       if (permission !== 'granted') {
         setStatusMessage({
           type: 'aviso',
-          text: 'Você não autorizou as notificações. Você pode ativar a qualquer momento.',
+          text: 'Você não autorizou as notificações neste aparelho. Lembretes e escalas continuarão sendo enviados pelo e-mail cadastrado ou WhatsApp.',
         });
         setLoading(false);
         return;
@@ -262,6 +275,18 @@ export function PushNotificationManager() {
           )}
         </div>
       </div>
+
+      {isIosPromptNeeded && (
+        <div className="p-3 bg-bg-muted rounded-control border border-line text-xs text-ink-muted space-y-1">
+          <p className="font-semibold text-ink flex items-center gap-1.5">
+            📱 Usuários de iPhone / iPad (iOS):
+          </p>
+          <p>
+            No iPhone, as notificações push exigem que o aplicativo esteja instalado na Tela de Início.
+            Para ativar: toque no botão <strong>Compartilhar</strong> do Safari e escolha <strong>"Adicionar à Tela de Início"</strong>.
+          </p>
+        </div>
+      )}
 
       {statusMessage && (
         <div

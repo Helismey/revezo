@@ -155,9 +155,18 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Limpeza de cache no logout (orientado pela Rule 17)
+// Mensagens do cliente (atualizações e limpeza de sessão)
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.action === 'CLEAR_USER_CACHE') {
+  if (!event.data) return;
+
+  // Atualização do Service Worker para nova versão
+  if (event.data.action === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
+  // Limpeza de cache no logout (orientado pela Rule 17 e LGPD)
+  if (event.data.action === 'CLEAR_USER_CACHE') {
     caches.open(CACHE_NAME).then((cache) => {
       cache.keys().then((keys) => {
         keys.forEach((request) => {
