@@ -123,10 +123,16 @@ export function verifySessionToken(token: string): SessionData | null {
  * Valida integridade, expiração absoluta, expiração por inatividade e status da conta.
  */
 export const getSession = cache(async function getSession(): Promise<SessionData | null> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-  let rawToken = sessionCookie?.value;
+  let rawToken: string | undefined;
   let isBearerToken = false;
+
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    rawToken = sessionCookie?.value;
+  } catch {
+    // cookies() pode não estar disponível em contextos fora de SSR/NextRequest
+  }
 
   // Se não houver cookie, verifica se a requisição porta Bearer Token (Regra 09: API compatível com mobile/Capacitor)
   if (!rawToken) {
@@ -233,8 +239,12 @@ export async function createSession(user: {
  * Destrói a sessão (logout).
  */
 export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete(SESSION_COOKIE_NAME);
+  } catch {
+    // cookies() pode não estar disponível em contextos fora de SSR
+  }
 }
 
 /**

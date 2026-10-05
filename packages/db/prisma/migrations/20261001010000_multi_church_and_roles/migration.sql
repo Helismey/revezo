@@ -1,7 +1,3 @@
--- AlterEnum
-ALTER TYPE "GlobalRole" ADD VALUE IF NOT EXISTS 'PASTOR';
-ALTER TYPE "GlobalRole" ADD VALUE IF NOT EXISTS 'ELDER';
-
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Church" (
     "id" TEXT NOT NULL,

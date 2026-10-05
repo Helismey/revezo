@@ -12,6 +12,7 @@
     "test:prop": "vitest run packages/domain/test/scheduling.prop.test.ts",
     "test:matrix": "vitest run packages/domain/test/authz-matrix.test.ts",
     "test:concurrency": "vitest run packages/domain/test/concurrency.test.ts",
+    "test:int": "vitest run packages/db/test/integration-db.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
     "test:mutation": "pnpm --filter @revezo/domain test:mutation",
