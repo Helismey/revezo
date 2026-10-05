@@ -62,6 +62,6 @@ function createPrismaClient(): PrismaClient {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Mantém o singleton em globalThis inclusive em lambdas serverless aquecidas (prevenindo exaustão de pool de conexões)
+globalForPrisma.prisma = prisma;
+

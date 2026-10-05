@@ -4,6 +4,7 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "pnpm --filter @revezo/web dev",
+    "postinstall": "pnpm --filter @revezo/db generate",
     "build": "pnpm exec turbo run build",
     "build:raw": "pnpm -r --filter=!@revezo/web build && pnpm --filter @revezo/web build",
     "start": "pnpm --filter @revezo/web start",

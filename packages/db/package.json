@@ -17,7 +17,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx src/seed.ts",
-    "build": "tsc -b",
+    "build": "prisma generate && tsc -b",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },

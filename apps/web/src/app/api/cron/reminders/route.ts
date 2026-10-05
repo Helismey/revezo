@@ -9,11 +9,11 @@ import {
 } from '@revezo/domain';
 import { notificationDispatcher } from '@/services/notifications/dispatcher';
 
-export async function POST(request: Request) {
+async function handleReminders(request: Request) {
   try {
     // 1. Validação de segurança via CRON_SECRET com proteção contra timing attack e fail-closed
     const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET?.trim();
 
     if (process.env.NODE_ENV === 'production') {
       if (!cronSecret) {
@@ -186,3 +186,12 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function GET(request: Request) {
+  return handleReminders(request);
+}
+
+export async function POST(request: Request) {
+  return handleReminders(request);
+}
+

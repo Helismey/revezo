@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { prisma } from '@revezo/db';
 
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET?.trim();
   const authHeader = req.headers.get('authorization');
 
   if (process.env.NODE_ENV === 'production' && !cronSecret) {
