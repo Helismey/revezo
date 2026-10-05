@@ -15,9 +15,9 @@ jobs:
     name: Propriedades, Matriz e Concorrência
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -25,7 +25,7 @@ jobs:
       - name: Gerar cliente Prisma
         run: pnpm db:generate
       - name: Build pacotes internos
-        run: pnpm -r --filter=!@escala-igreja/web build
+        run: pnpm -r --filter=!@revezo/web build
       - name: Testes de Propriedade (fast-check)
         run: pnpm test:prop
       - name: Matriz Completa de Autorização
@@ -42,9 +42,9 @@ jobs:
       NEXTAUTH_URL: "http://localhost:3000"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -52,7 +52,7 @@ jobs:
       - name: Gerar cliente Prisma
         run: pnpm db:generate
       - name: Build pacotes internos
-        run: pnpm -r --filter=!@escala-igreja/web build
+        run: pnpm -r --filter=!@revezo/web build
       - name: Instalar navegadores Playwright
         run: pnpm exec playwright install --with-deps chromium
       - name: Executar testes de fumaça E2E

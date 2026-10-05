@@ -28,7 +28,7 @@ jobs:
     name: Gitleaks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7    # v7 — runtime Node 24
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v3   # v3 — runtime Node 24 (v2 depreciado em 16/09/2026)
@@ -41,7 +41,7 @@ jobs:
     name: CodeQL
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript

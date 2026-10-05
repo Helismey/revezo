@@ -23,17 +23,17 @@ jobs:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7          # v7 — runtime Node 24
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6        # v6 — runtime Node 24
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Gerar cliente Prisma (necessário para tipos de @prisma/client)
         run: pnpm db:generate
-      - name: Build dos pacotes internos (necessário para resolver @escala-igreja/*)
-        run: pnpm -r --filter=!@escala-igreja/web build
+      - name: Build dos pacotes internos (necessário para resolver @revezo/*)
+        run: pnpm -r --filter=!@revezo/web build
       - run: pnpm lint
       - run: pnpm typecheck
 
@@ -42,9 +42,9 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -52,7 +52,7 @@ jobs:
       - name: Gerar cliente Prisma
         run: pnpm db:generate
       - name: Build dos pacotes internos
-        run: pnpm -r --filter=!@escala-igreja/web build
+        run: pnpm -r --filter=!@revezo/web build
       - run: pnpm test
 
   # ─── Job 3: Build do Next.js ─────────────────────────────────────────────────
@@ -68,9 +68,9 @@ jobs:
       NEXTAUTH_URL: "http://localhost:3000"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -78,9 +78,9 @@ jobs:
       - name: Gerar cliente Prisma
         run: pnpm db:generate
       - name: Build dos pacotes internos
-        run: pnpm -r --filter=!@escala-igreja/web build
+        run: pnpm -r --filter=!@revezo/web build
       - name: Build do Next.js
-        run: pnpm --filter @escala-igreja/web build
+        run: pnpm --filter @revezo/web build
 
   # ─── Job 4: Auditoria de dependências ────────────────────────────────────────
   # Falha apenas em severidade high/critical (moderate documentado em tech-debt.md).
@@ -88,9 +88,9 @@ jobs:
     name: Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
