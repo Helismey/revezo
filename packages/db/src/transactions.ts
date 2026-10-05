@@ -31,6 +31,9 @@ import {
   canCancelSwap,
   validateSwapProposal,
   generateRecurrenceDates,
+  generateRefreshTokenPair,
+  hashRefreshToken,
+  evaluateRefreshToken,
 } from '@revezo/domain';
 
 export interface AssignMemberParams {
@@ -1214,6 +1217,249 @@ export async function resetPasswordWithToken(
       userId: actionToken.userId,
       userName: actionToken.user.name,
     };
+  });
+}
+
+// ---- Gestão de Tokens de Sessão App / Mobile (Regra 10) ----
+
+export interface CreateAppSessionTokensParams {
+  userId: string;
+  deviceName?: string;
+  ip?: string;
+  familyId?: string;
+}
+
+/**
+ * Emite um novo par de tokens para aplicativo mobile (Capacitor/App).
+ * Cria um registro em RefreshToken com familyId e hash SHA-256.
+ */
+export async function createAppSessionTokens(params: CreateAppSessionTokensParams) {
+  const { userId, deviceName, ip, familyId } = params;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user || user.status !== 'ACTIVE') {
+    throw new Error('Usuário inativo ou não autorizado.');
+  }
+
+  const pair = generateRefreshTokenPair(familyId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.refreshToken.create({
+      data: {
+        userId: user.id,
+        familyId: pair.familyId,
+        tokenHash: pair.tokenHash,
+        deviceName: deviceName || null,
+        expiresAt: pair.expiresAt,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: user.id,
+        churchId: user.churchId,
+        action: 'APP_TOKEN_ISSUED',
+        targetType: 'User',
+        targetId: user.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          familyId: pair.familyId,
+          deviceName: deviceName || 'Desconhecido',
+          expiresAt: pair.expiresAt.toISOString(),
+        },
+      },
+    });
+  });
+
+  return {
+    rawRefreshToken: pair.rawRefreshToken,
+    familyId: pair.familyId,
+    expiresAt: pair.expiresAt,
+    user,
+  };
+}
+
+export interface RotateAppRefreshTokenParams {
+  rawRefreshToken: string;
+  deviceName?: string;
+  ip?: string;
+}
+
+/**
+ * Rotaciona um Refresh Token com detecção de reuso estrita (Regra 10 & Item 6):
+ * - Se o token for válido e ativo: revoga o atual, emite novo na mesma família.
+ * - Se o token já tiver sido revogado (REUSO DETECTADO): revoga imediatamente toda a família de tokens.
+ */
+export async function rotateAppRefreshToken(params: RotateAppRefreshTokenParams) {
+  const { rawRefreshToken, deviceName, ip } = params;
+  const tokenHash = hashRefreshToken(rawRefreshToken);
+
+  const tokenRecord = await prisma.refreshToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!tokenRecord) {
+    await prisma.auditLog.create({
+      data: {
+        action: 'APP_TOKEN_REFRESH_FAILED',
+        result: 'DENIED',
+        ip,
+        meta: { reason: 'TOKEN_NOT_FOUND' },
+      },
+    });
+    throw new Error('Sessão expirada ou inválida. Faça login novamente.');
+  }
+
+  const evaluation = evaluateRefreshToken(tokenRecord);
+
+  // DETECÇÃO DE REUSO: token já revogado sendo apresentado novamente
+  if (evaluation.reuseDetected) {
+    await prisma.$transaction(async (tx) => {
+      // Revoga TODOS os tokens da família por segurança
+      await tx.refreshToken.updateMany({
+        where: { familyId: tokenRecord.familyId },
+        data: { revokedAt: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: tokenRecord.userId,
+          churchId: tokenRecord.user.churchId,
+          action: 'REFRESH_TOKEN_REUSE_DETECTED',
+          targetType: 'RefreshTokenFamily',
+          targetId: tokenRecord.familyId,
+          result: 'DENIED',
+          ip,
+          meta: {
+            revokedFamilyId: tokenRecord.familyId,
+            deviceName: deviceName || tokenRecord.deviceName,
+            warning: 'Possível tentativa de roubo ou replay de token.',
+          },
+        },
+      });
+    });
+
+    throw new Error('Reuso de token detectado. Todas as sessões deste dispositivo foram revogadas por segurança.');
+  }
+
+  if (!evaluation.valid) {
+    await prisma.auditLog.create({
+      data: {
+        actorId: tokenRecord.userId,
+        churchId: tokenRecord.user.churchId,
+        action: 'APP_TOKEN_REFRESH_FAILED',
+        result: 'DENIED',
+        ip,
+        meta: { reason: evaluation.reason },
+      },
+    });
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+
+  if (tokenRecord.user.status !== 'ACTIVE') {
+    throw new Error('Conta não autorizada ou inativa.');
+  }
+
+  // Rotação atômica
+  const newPair = generateRefreshTokenPair(tokenRecord.familyId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.refreshToken.update({
+      where: { id: tokenRecord.id },
+      data: { revokedAt: new Date() },
+    });
+
+    await tx.refreshToken.create({
+      data: {
+        userId: tokenRecord.userId,
+        familyId: tokenRecord.familyId,
+        tokenHash: newPair.tokenHash,
+        deviceName: deviceName || tokenRecord.deviceName,
+        expiresAt: newPair.expiresAt,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: tokenRecord.userId,
+        churchId: tokenRecord.user.churchId,
+        action: 'APP_TOKEN_ROTATED',
+        targetType: 'User',
+        targetId: tokenRecord.userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          familyId: tokenRecord.familyId,
+          deviceName: deviceName || tokenRecord.deviceName,
+        },
+      },
+    });
+  });
+
+  return {
+    rawRefreshToken: newPair.rawRefreshToken,
+    familyId: tokenRecord.familyId,
+    expiresAt: newPair.expiresAt,
+    user: tokenRecord.user,
+  };
+}
+
+/**
+ * Revoga toda a família de refresh tokens (ex.: logout de um dispositivo específico).
+ */
+export async function revokeAppRefreshTokenFamily(familyId: string, ip?: string, actorId?: string) {
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.refreshToken.updateMany({
+      where: { familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    if (actorId) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'APP_TOKEN_FAMILY_REVOKED',
+          targetType: 'RefreshTokenFamily',
+          targetId: familyId,
+          result: 'SUCCESS',
+          ip,
+          meta: { revokedCount: updated.count },
+        },
+      });
+    }
+
+    return updated.count;
+  });
+}
+
+/**
+ * Revoga todos os tokens mobile de um usuário (ex.: ao alterar senha ou encerrar sessões).
+ */
+export async function revokeAllUserAppTokens(userId: string, ip?: string, actorId?: string) {
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || userId,
+        action: 'ALL_APP_TOKENS_REVOKED',
+        targetType: 'User',
+        targetId: userId,
+        result: 'SUCCESS',
+        ip,
+        meta: { revokedCount: updated.count },
+      },
+    });
+
+    return updated.count;
   });
 }
 

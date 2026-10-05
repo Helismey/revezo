@@ -18,6 +18,9 @@ import {
   formatSecretForDisplay,
   validatePasswordPolicy,
   hashPassword,
+  generateSessionId,
+  evaluateSessionValidity,
+  ACCESS_TOKEN_LIFETIME_SECONDS,
 } from '@revezo/domain';
 import { RegisterInput } from '@revezo/contracts';
 import QRCode from 'qrcode';
@@ -51,13 +54,16 @@ export const registerRateLimiter = new HybridRateLimiter({
 });
 
 export interface SessionData {
+  sessionId?: string; // ID aleatório de 256 bits (Regra 10)
   userId: string;
   globalRole: GlobalRole;
   status: AccountStatus;
   name: string;
   email: string;
   mfaEnabled?: boolean;
+  isManager?: boolean;
   createdAt: number;
+  lastActiveAt?: number;
 }
 
 /**
@@ -70,6 +76,20 @@ export function signSessionPayload(data: SessionData): string {
     .update(base64Data)
     .digest('base64url');
   return `${base64Data}.${signature}`;
+}
+
+/**
+ * Emite Access Token curto de 15 minutos para aplicativo mobile nativo (Capacitor/App).
+ * Regra 10: Access token de 15 min + refresh com rotação.
+ */
+export function signMobileAccessToken(data: SessionData): string {
+  const now = Date.now();
+  return signSessionPayload({
+    ...data,
+    sessionId: data.sessionId || generateSessionId(),
+    createdAt: now,
+    lastActiveAt: now,
+  });
 }
 
 /**
@@ -100,11 +120,13 @@ export function verifySessionToken(token: string): SessionData | null {
 
 /**
  * Obtém a sessão do usuário autenticado no servidor.
+ * Valida integridade, expiração absoluta, expiração por inatividade e status da conta.
  */
 export const getSession = cache(async function getSession(): Promise<SessionData | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   let rawToken = sessionCookie?.value;
+  let isBearerToken = false;
 
   // Se não houver cookie, verifica se a requisição porta Bearer Token (Regra 09: API compatível com mobile/Capacitor)
   if (!rawToken) {
@@ -113,6 +135,7 @@ export const getSession = cache(async function getSession(): Promise<SessionData
       const authHeader = reqHeaders.get('authorization');
       if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
         rawToken = authHeader.substring(7).trim();
+        isBearerToken = true;
       }
     } catch {
       // headers() pode não estar disponível em contextos estáticos
@@ -128,9 +151,38 @@ export const getSession = cache(async function getSession(): Promise<SessionData
     return null;
   }
 
-  // Verifica expiração máxima absoluta
   const now = Date.now();
-  if (now - session.createdAt > SESSION_MAX_AGE_SECONDS * 1000) {
+
+  // Se for Bearer Token de app mobile, valida expiração estrita de 15 minutos (Regra 10)
+  if (isBearerToken) {
+    if (now - session.createdAt > ACCESS_TOKEN_LIFETIME_SECONDS * 1000) {
+      return null;
+    }
+  } else {
+    // Para sessão web com cookie, avalia expiração máxima e inatividade (Regra 10)
+    const validation = evaluateSessionValidity(
+      {
+        sessionId: session.sessionId || 'legacy',
+        userId: session.userId,
+        globalRole: session.globalRole,
+        status: session.status,
+        name: session.name,
+        email: session.email,
+        mfaEnabled: session.mfaEnabled,
+        isManager: session.isManager,
+        createdAt: session.createdAt,
+        lastActiveAt: session.lastActiveAt || session.createdAt,
+      },
+      now
+    );
+
+    if (!validation.valid) {
+      return null;
+    }
+  }
+
+  // Contas PENDENTES, REJEITADAS ou INATIVAS não acessam dados (Regra 10)
+  if (session.status !== 'ACTIVE') {
     return null;
   }
 
@@ -138,7 +190,7 @@ export const getSession = cache(async function getSession(): Promise<SessionData
 });
 
 /**
- * Cria ou rotaciona a sessão segura no login.
+ * Cria ou rotaciona a sessão segura no login web com ID aleatório de 256 bits (Regra 10).
  */
 export async function createSession(user: {
   id: string;
@@ -147,15 +199,20 @@ export async function createSession(user: {
   name: string;
   email: string;
   mfaEnabled?: boolean;
+  isManager?: boolean;
 }) {
+  const now = Date.now();
   const sessionData: SessionData = {
+    sessionId: generateSessionId(),
     userId: user.id,
     globalRole: user.globalRole,
     status: user.status,
     name: user.name,
     email: user.email,
     mfaEnabled: user.mfaEnabled,
-    createdAt: Date.now(),
+    isManager: user.isManager,
+    createdAt: now,
+    lastActiveAt: now,
   };
 
   const token = signSessionPayload(sessionData);
@@ -483,6 +540,11 @@ export async function authenticateUser(email: string, password: string, totpCode
   // 2. Busca do usuário (sem revelar se existe ou não)
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase().trim() },
+    include: {
+      memberships: {
+        select: { role: true },
+      },
+    },
   });
 
   // Mensagem genérica anti-enumeração
@@ -501,19 +563,59 @@ export async function authenticateUser(email: string, password: string, totpCode
     return { success: false, error: INVALID_CREDENTIALS_MSG };
   }
 
+  // 2.1 Bloqueio temporário por conta (Regra 10: limitar tentativas por IP e por conta)
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
+    await prisma.auditLog.create({
+      data: {
+        actorId: user.id,
+        churchId: user.churchId,
+        action: 'LOGIN_BLOCKED_ACCOUNT_LOCKED',
+        result: 'DENIED',
+        ip: clientIp,
+        meta: { minutesLeft },
+      },
+    });
+    return {
+      success: false,
+      error: `Esta conta está temporariamente bloqueada por excesso de tentativas. Tente novamente em ${minutesLeft} minuto(s).`,
+    };
+  }
+
   // 3. Verificação de senha
   const passwordValid = verifyPassword(password, user.passwordHash);
   if (!passwordValid) {
     await loginRateLimiter.recordAttempt(rateLimitKey);
+    const newFailed = user.failedLogins + 1;
+    const shouldLock = newFailed >= 5;
+    const lockedUntil = shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : user.lockedUntil;
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLogins: newFailed,
+        lockedUntil,
+      },
+    });
+
     await prisma.auditLog.create({
       data: {
         actorId: user.id,
-        action: 'LOGIN_FAILED',
+        churchId: user.churchId,
+        action: shouldLock ? 'ACCOUNT_LOCKED_BRUTE_FORCE' : 'LOGIN_FAILED',
         result: 'DENIED',
         ip: clientIp,
-        meta: { reason: 'INVALID_PASSWORD' },
+        meta: { reason: 'INVALID_PASSWORD', failedAttempts: newFailed, locked: shouldLock },
       },
     });
+
+    if (shouldLock) {
+      return {
+        success: false,
+        error: 'Muitas tentativas incorretas. Esta conta foi temporariamente bloqueada por 15 minutos.',
+      };
+    }
+
     return { success: false, error: INVALID_CREDENTIALS_MSG };
   }
 
@@ -607,6 +709,16 @@ export async function authenticateUser(email: string, password: string, totpCode
   // 6. Login bem-sucedido: limpa tentativas e rotaciona sessão
   await loginRateLimiter.reset(rateLimitKey);
 
+  // Reseta contadores de falhas por conta no banco
+  if (user.failedLogins > 0 || user.lockedUntil) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLogins: 0, lockedUntil: null },
+    });
+  }
+
+  const isManager = user.memberships?.some((m) => m.role === 'MANAGER');
+
   const token = await createSession({
     id: user.id,
     globalRole: user.globalRole as GlobalRole,
@@ -614,18 +726,20 @@ export async function authenticateUser(email: string, password: string, totpCode
     name: user.name,
     email: user.email,
     mfaEnabled: user.mfaEnabled,
+    isManager,
   });
 
   await prisma.auditLog.create({
     data: {
       actorId: user.id,
+      churchId: user.churchId,
       action: 'LOGIN_SUCCESS',
       result: 'SUCCESS',
       ip: clientIp,
     },
   });
 
-  return { success: true, token };
+  return { success: true, token, user };
 }
 
 /**

@@ -23,6 +23,8 @@ export * from './auth/password.js';
 export * from './auth/rate-limiter.js';
 export * from './auth/totp.js';
 export * from './auth/action-token.js';
+export * from './auth/session.js';
+export * from './auth/app-token.js';
 
 // Navegação & Menus
 export * from './navigation/menu.js';

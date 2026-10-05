@@ -85,3 +85,10 @@ export const passwordResetConfirmSchema = z.object({
 });
 
 export type PasswordResetConfirmInput = z.infer<typeof passwordResetConfirmSchema>;
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(32, 'Refresh token inválido'),
+  deviceName: z.string().max(100).optional(),
+});
+
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
