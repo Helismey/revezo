@@ -3,6 +3,7 @@ import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { DepartamentosClient, DepartmentDetail, ActiveUserOption } from './DepartamentosClient';
+import { maskEmail } from '@revezo/domain';
 
 export default async function DepartamentosPage() {
   const session = await getSession();
@@ -11,6 +12,9 @@ export default async function DepartamentosPage() {
   }
 
   const userContext = await getCurrentUserContext();
+  if (!userContext || userContext.status !== 'ACTIVE') {
+    redirect('/login');
+  }
   const churchContext = await getActiveChurchContext();
   const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
 
@@ -57,29 +61,37 @@ export default async function DepartamentosPage() {
     },
   });
 
-  const activeUsers = await prisma.user.findMany({
-    where: {
-      status: 'ACTIVE',
-      ...(activeChurchId ? { churchId: activeChurchId } : {}),
-    },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: 'asc' },
-  });
+  const canAssignMembers = canManageAll || managedDepartmentIds.length > 0;
+  const activeUsers = canAssignMembers
+    ? await prisma.user.findMany({
+        where: {
+          status: 'ACTIVE',
+          ...(activeChurchId ? { churchId: activeChurchId } : {}),
+        },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+      })
+    : [];
 
-  const serializedDepts: DepartmentDetail[] = depts.map((d) => ({
-    id: d.id,
-    name: d.name,
-    functions: d.functions.map((f) => ({ id: f.id, name: f.name })),
-    membersCount: d.members.length,
-    members: d.members.map((m) => ({
-      id: m.id,
-      userId: m.userId,
-      userName: m.user.name,
-      userEmail: m.user.email,
-      role: m.role as 'MANAGER' | 'MEMBER',
-      functions: m.functions.map((f) => ({ id: f.function.id, name: f.function.name })),
-    })),
-  }));
+  const serializedDepts: DepartmentDetail[] = depts.map((d) => {
+    const isManagerOfThisDept = managedDepartmentIds.includes(d.id);
+    const canSeeContact = canManageAll || isManagerOfThisDept;
+
+    return {
+      id: d.id,
+      name: d.name,
+      functions: d.functions.map((f) => ({ id: f.id, name: f.name })),
+      membersCount: d.members.length,
+      members: d.members.map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.name,
+        userEmail: canSeeContact ? m.user.email : maskEmail(m.user.email),
+        role: m.role as 'MANAGER' | 'MEMBER',
+        functions: m.functions.map((f) => ({ id: f.function.id, name: f.function.name })),
+      })),
+    };
+  });
 
   const serializedActiveUsers: ActiveUserOption[] = activeUsers.map((u) => ({
     id: u.id,

@@ -4286,6 +4286,31 @@ export async function adminUpdateMemberWithAudit(params: AdminUpdateMemberParams
     }
     if (notes !== undefined) dataToUpdate.notes = notes?.trim() || null;
 
+    // Regra 11: Ninguém altera o próprio papel
+    if (actorId === userId && globalRole !== undefined && globalRole !== targetUser.globalRole) {
+      throw new Error('Operação negada: nenhum usuário pode alterar o próprio papel.');
+    }
+
+    // Regra 11: Sempre existir pelo menos um ADMIN_MASTER ativo
+    const isDemotingAdmin =
+      targetUser.globalRole === 'ADMIN_MASTER' &&
+      ((globalRole !== undefined && globalRole !== 'ADMIN_MASTER') ||
+        (status !== undefined && status !== 'ACTIVE'));
+
+    if (isDemotingAdmin) {
+      const activeAdminCount = await tx.user.count({
+        where: {
+          globalRole: 'ADMIN_MASTER',
+          status: 'ACTIVE',
+        },
+      });
+      if (activeAdminCount <= 1) {
+        throw new Error(
+          'Operação negada: o sistema deve possuir pelo menos um Administrador Master ativo.'
+        );
+      }
+    }
+
     // Papel eclesiástico
     if (globalRole !== undefined && globalRole !== targetUser.globalRole) {
       dataToUpdate.globalRole = globalRole;

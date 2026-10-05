@@ -6,6 +6,10 @@ import {
   maskEmail,
   sanitizeMemberForVolunteers,
   RawMemberData,
+  extractUserScope,
+  buildDepartmentScopeWhere,
+  buildAssignmentScopeWhere,
+  buildMemberScopeWhere,
 } from '../src/index.js';
 
 describe('Autorização RBAC (can) e Escopo Departamental', () => {
@@ -270,5 +274,138 @@ describe('Sanitização e Mascaramento de Dados Pessoais (LGPD)', () => {
     expect((sanitized as unknown as RawMemberData).email).toBeUndefined();
     expect((sanitized as unknown as RawMemberData).address).toBeUndefined();
     expect((sanitized as unknown as RawMemberData).emergencyContact).toBeUndefined();
+  });
+});
+
+describe('Regra 11: Imutabilidade do Próprio Papel e Listagem de Membros', () => {
+  const pastor: UserContext = {
+    id: 'pastor-1',
+    globalRole: 'PASTOR',
+    status: 'ACTIVE',
+    pastorChurchIds: ['church-1'],
+    departmentMemberships: [],
+  };
+
+  const anciao: UserContext = {
+    id: 'anciao-1',
+    globalRole: 'ELDER',
+    status: 'ACTIVE',
+    churchId: 'church-1',
+    departmentMemberships: [],
+  };
+
+  const gestor: UserContext = {
+    id: 'gestor-1',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'church-1',
+    departmentMemberships: [{ departmentId: 'dept-1', role: 'MANAGER' }],
+  };
+
+  const voluntario: UserContext = {
+    id: 'vol-1',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'church-1',
+    departmentMemberships: [{ departmentId: 'dept-1', role: 'MEMBER' }],
+  };
+
+  it('impede que qualquer usuário altere o próprio papel global', () => {
+    // Pastor não pode mudar seu próprio papel
+    expect(can(pastor, 'profile:update:other', { targetUserId: pastor.id, newRole: 'ADMIN_MASTER' })).toBe(false);
+    expect(can(pastor, 'profile:update:other', { targetUserId: pastor.id, newRole: 'USER' })).toBe(false);
+
+    // Ancião não pode mudar seu próprio papel
+    expect(can(anciao, 'profile:update:other', { targetUserId: anciao.id, newRole: 'PASTOR' })).toBe(false);
+    expect(can(anciao, 'profile:update:other', { targetUserId: anciao.id, newRole: 'USER' })).toBe(false);
+
+    // Gestor e Voluntário não podem mudar o próprio papel
+    expect(can(gestor, 'profile:update:other', { targetUserId: gestor.id, newRole: 'ELDER' })).toBe(false);
+    expect(can(voluntario, 'profile:update:other', { targetUserId: voluntario.id, newRole: 'ELDER' })).toBe(false);
+  });
+
+  it('valida permissão de listagem geral de membros (member:list)', () => {
+    // Admin, Pastor e Ancião podem listar membros de sua congregação
+    expect(can(pastor, 'member:list', { churchId: 'church-1' })).toBe(true);
+    expect(can(anciao, 'member:list', { churchId: 'church-1' })).toBe(true);
+
+    // Gestor de departamento pode listar membros para sua gestão
+    expect(can(gestor, 'member:list')).toBe(true);
+    expect(can(gestor, 'member:list', { departmentId: 'dept-1' })).toBe(true);
+    expect(can(gestor, 'member:list', { departmentId: 'dept-2' })).toBe(false);
+
+    // Voluntário comum NÃO tem permissão de listagem cadastral de voluntários
+    expect(can(voluntario, 'member:list')).toBe(false);
+  });
+});
+
+describe('Construtores de Consulta Scoped (Prisma Anti-IDOR Filters)', () => {
+  const gestorA: UserContext = {
+    id: 'usr-gestor-a',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'igreja-1',
+    departmentMemberships: [{ departmentId: 'dept-a', role: 'MANAGER' }],
+  };
+
+  const membroComum: UserContext = {
+    id: 'usr-membro',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'igreja-1',
+    departmentMemberships: [{ departmentId: 'dept-a', role: 'MEMBER' }],
+  };
+
+  const inativo: UserContext = {
+    id: 'usr-inativo',
+    globalRole: 'USER',
+    status: 'INACTIVE',
+    churchId: 'igreja-1',
+    departmentMemberships: [{ departmentId: 'dept-a', role: 'MEMBER' }],
+  };
+
+  it('buildDepartmentScopeWhere restringe consultas de gestão aos departamentos sob gerência', () => {
+    const whereGestor = buildDepartmentScopeWhere(gestorA, 'department:update');
+    expect(whereGestor).toEqual({
+      id: { in: ['dept-a'] },
+      churchId: 'igreja-1',
+    });
+
+    const whereMembro = buildDepartmentScopeWhere(membroComum, 'department:update');
+    expect(whereMembro).toEqual({ id: '__DENIED_EMPTY__' });
+
+    const whereInativo = buildDepartmentScopeWhere(inativo, 'department:update');
+    expect(whereInativo).toEqual({ id: '__DENIED_EMPTY__' });
+  });
+
+  it('buildAssignmentScopeWhere restringe remoção e criação de escalas ao escopo departamental', () => {
+    const whereGestor = buildAssignmentScopeWhere(gestorA, 'assignment:delete');
+    expect(whereGestor).toEqual({
+      slot: {
+        departmentId: { in: ['dept-a'] },
+      },
+    });
+
+    const whereMembro = buildAssignmentScopeWhere(membroComum, 'assignment:delete');
+    expect(whereMembro).toEqual({ id: '__DENIED_EMPTY__' });
+
+    // Ações próprias são restritas ao próprio userId
+    const wherePropria = buildAssignmentScopeWhere(membroComum, 'assignment:confirm:own');
+    expect(wherePropria).toEqual({ userId: 'usr-membro' });
+  });
+
+  it('buildMemberScopeWhere restringe busca de membros aos departamentos gerenciados', () => {
+    const whereGestor = buildMemberScopeWhere(gestorA, 'member:create');
+    expect(whereGestor).toEqual({
+      memberships: {
+        some: {
+          departmentId: { in: ['dept-a'] },
+        },
+      },
+      churchId: 'igreja-1',
+    });
+
+    const whereMembro = buildMemberScopeWhere(membroComum, 'member:create');
+    expect(whereMembro).toEqual({ id: '__DENIED_EMPTY__' });
   });
 });

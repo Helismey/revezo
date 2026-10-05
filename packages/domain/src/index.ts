@@ -14,6 +14,7 @@ export * from './scheduling/recurrence.js';
 // RBAC & Autorização
 export * from './authz/can.js';
 export * from './authz/sanitization.js';
+export * from './authz/scope.js';
 
 // Criptografia
 export * from './crypto/aes.js';

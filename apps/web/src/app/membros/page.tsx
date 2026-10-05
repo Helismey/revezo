@@ -12,28 +12,54 @@ export default async function MembrosPage() {
   }
 
   const userContext = await getCurrentUserContext();
+  if (!userContext || userContext.status !== 'ACTIVE') {
+    redirect('/login');
+  }
+
   const churchContext = await getActiveChurchContext();
   const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
 
-  const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
-  const isPastor = userContext?.globalRole === 'PASTOR';
-  const isElder = userContext?.globalRole === 'ELDER';
+  const canListMembers = can(userContext, 'member:list', { churchId: activeChurchId || undefined });
+  if (!canListMembers) {
+    redirect('/minha-escala');
+  }
 
-  const canAssignElder = userContext
-    ? can(userContext, 'church:elder:assign', { churchId: activeChurchId || undefined })
-    : false;
+  const isAdmin = userContext.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext.globalRole === 'PASTOR';
+  const isElder = userContext.globalRole === 'ELDER';
+  const canManageAll = isAdmin || isPastor || isElder;
 
-  const managedDeptIds =
-    userContext?.departmentMemberships
-      .filter((m) => m.role === 'MANAGER')
-      .map((m) => m.departmentId) || [];
+  const canAssignElder = can(userContext, 'church:elder:assign', { churchId: activeChurchId || undefined });
+
+  const managedDeptIds = userContext.departmentMemberships
+    .filter((m) => m.role === 'MANAGER')
+    .map((m) => m.departmentId);
+
+  const memberWhere = canManageAll
+    ? {
+        status: { in: ['ACTIVE' as const, 'PENDING' as const, 'INACTIVE' as const] },
+        ...(activeChurchId ? { churchId: activeChurchId } : {}),
+      }
+    : {
+        status: { in: ['ACTIVE' as const, 'PENDING' as const, 'INACTIVE' as const] },
+        memberships: {
+          some: {
+            departmentId: { in: managedDeptIds },
+          },
+        },
+        ...(activeChurchId ? { churchId: activeChurchId } : {}),
+      };
+
+  const deptWhere = canManageAll
+    ? (activeChurchId ? { churchId: activeChurchId } : undefined)
+    : {
+        id: { in: managedDeptIds },
+        ...(activeChurchId ? { churchId: activeChurchId } : {}),
+      };
 
   const [users, departments] = await Promise.all([
     prisma.user.findMany({
-      where: {
-        status: { in: ['ACTIVE', 'PENDING', 'INACTIVE'] },
-        ...(activeChurchId ? { churchId: activeChurchId } : {}),
-      },
+      where: memberWhere,
       include: {
         memberships: {
           include: {
@@ -49,7 +75,7 @@ export default async function MembrosPage() {
       },
     }),
     prisma.department.findMany({
-      where: activeChurchId ? { churchId: activeChurchId } : undefined,
+      where: deptWhere,
       include: {
         functions: {
           orderBy: { name: 'asc' },

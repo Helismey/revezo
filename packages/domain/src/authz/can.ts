@@ -50,6 +50,7 @@ export type Action =
   | 'registration:reject'
   // Membros
   | 'member:create'
+  | 'member:list'
   | 'member:import'
   | 'member:export'
   // Departamentos e Funções
@@ -114,16 +115,18 @@ export function can(
     return false;
   }
 
-  // 1. ADMIN_MASTER possui acesso a tudo, exceto auto-rebaixamento do próprio papel
+  // Regra fundamental (Regra 11): Ninguém altera o próprio papel (nem ADMIN_MASTER, PASTOR, ELDER, GESTOR ou USER)
+  if (
+    action === 'profile:update:other' &&
+    resource?.targetUserId === user.id &&
+    resource?.newRole &&
+    resource.newRole !== user.globalRole
+  ) {
+    return false;
+  }
+
+  // 1. ADMIN_MASTER possui acesso a tudo
   if (user.globalRole === 'ADMIN_MASTER') {
-    if (
-      action === 'profile:update:other' &&
-      resource?.targetUserId === user.id &&
-      resource?.newRole &&
-      resource.newRole !== 'ADMIN_MASTER'
-    ) {
-      return false;
-    }
     return true;
   }
 
@@ -234,6 +237,7 @@ export function can(
       case 'function:update':
       case 'manager:assign':
       case 'member:create':
+      case 'member:list':
       case 'profile:view:other':
       case 'assignment:create':
       case 'assignment:delete':
@@ -328,6 +332,13 @@ export function can(
     case 'function:create':
     case 'function:update':
       return isManagerOf(resource?.departmentId);
+
+    // Listagem geral de voluntários (apenas para quem é gestor de pelo menos 1 departamento)
+    case 'member:list':
+      if (resource?.departmentId) {
+        return isManagerOf(resource.departmentId);
+      }
+      return managedDepartmentIds.length > 0;
 
     // Programas
     case 'program:view':

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { removeAssignmentSchema } from '@revezo/contracts';
 import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@revezo/domain';
+import { can, buildAssignmentScopeWhere } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +23,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: parsed.data.assignmentId },
+    // Consulta já filtrada por escopo direto no banco (Anti-IDOR conforme Regra 11)
+    const scopeWhere = buildAssignmentScopeWhere(userContext, 'assignment:delete');
+    const assignment = await prisma.assignment.findFirst({
+      where: {
+        id: parsed.data.assignmentId,
+        ...scopeWhere,
+      },
       include: {
         slot: {
           include: {
@@ -37,20 +42,13 @@ export async function POST(request: Request) {
     });
 
     if (!assignment) {
-      return NextResponse.json({ success: false, error: 'Escala não encontrada' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'Escala não encontrada ou fora do seu escopo de permissão' },
+        { status: 404 }
+      );
     }
 
     const churchId = assignment.slot.program?.churchId || undefined;
-    const allowed = can(userContext, 'assignment:delete', {
-      departmentId: assignment.slot.departmentId,
-      churchId,
-    });
-    if (!allowed) {
-      return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para remover escalas deste departamento ou congregação' },
-        { status: 403 }
-      );
-    }
 
     await prisma.assignment.delete({
       where: { id: assignment.id },
