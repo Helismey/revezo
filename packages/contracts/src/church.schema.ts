@@ -14,10 +14,20 @@ export const churchAddressSchema = z.object({
 
 export type ChurchAddress = z.infer<typeof churchAddressSchema>;
 
+export const safeImageUrlSchema = z
+  .string()
+  .trim()
+  .url('URL da imagem inválida')
+  .max(500, 'URL muito longa')
+  .refine(
+    (url) => !url.toLowerCase().endsWith('.svg') && !url.toLowerCase().includes('.svg?'),
+    'Imagens no formato SVG são proibidas por motivos de segurança (Regra 12)'
+  );
+
 export const updateChurchSettingsSchema = z.object({
   churchId: z.string().optional(),
   name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100),
-  logoUrl: z.string().url('URL inválida').optional().nullable(),
+  logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB'),
   secondaryColor: z.string().regex(hexColorRegex, 'Cor secundária deve estar no formato #RRGGBB'),
   phone: z.string().trim().optional().nullable(),
@@ -29,7 +39,7 @@ export type UpdateChurchSettingsInput = z.infer<typeof updateChurchSettingsSchem
 export const createChurchSchema = z.object({
   name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100),
   slug: z.string().trim().min(3).max(50).regex(/^[a-z0-9-]+$/, 'Slug deve conter apenas letras minúsculas, números e hífens'),
-  logoUrl: z.string().url('URL inválida').optional().nullable(),
+  logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB').default('#1E40AF'),
   secondaryColor: z.string().regex(hexColorRegex, 'Cor secundária deve estar no formato #RRGGBB').default('#F59E0B'),
   phone: z.string().trim().optional().nullable(),
@@ -43,7 +53,7 @@ export const updateChurchSchema = z.object({
   churchId: z.string().min(1, 'ID da igreja é obrigatório'),
   name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100).optional(),
   slug: z.string().trim().min(3).max(50).regex(/^[a-z0-9-]+$/, 'Slug deve conter apenas letras minúsculas, números e hífens').optional(),
-  logoUrl: z.string().url('URL inválida').optional().nullable(),
+  logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB').optional(),
   secondaryColor: z.string().regex(hexColorRegex, 'Cor secundária deve estar no formato #RRGGBB').optional(),
   phone: z.string().trim().optional().nullable(),

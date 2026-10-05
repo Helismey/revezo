@@ -43,3 +43,6 @@ export * from './notifications/webhook-security.js';
 // Calendário (.ics)
 export * from './calendar/ics-generator.js';
 
+// Segurança Web & OWASP (Regra 12)
+export * from './security/web-security.js';
+
