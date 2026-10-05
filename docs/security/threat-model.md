@@ -13,11 +13,12 @@ Fronteiras de confiança: navegador/PWA/app ↔ servidor; servidor ↔ banco; se
 | Importação CSV | T | Injeção de fórmula, texto com instruções ao agente | Sanitização de strings, regras da skill importacao-membros | 18 |
 | Motor de escala | T, R | Concorrência quebrando regras (ex: 2 voluntários na mesma vaga); ação sem rastro | Transações atômicas com bloqueio no Prisma, `AuditLog` com IP e ator | 19, ADR-004 |
 | Trocas e Substituições | T, E, R | Troca forjada entre voluntários; desmarcação sem registro; substituição concorrente | Permuta atômica em transação, checagem de elegibilidade e aprovação do gestor | 11, 19 |
-| Lembretes/WhatsApp | S, I, D | Envio a destino arbitrário, bloqueio do número, vazamento em mensagem | Destinatário sempre do banco, opt-out obrigatório, mensagens mínimas, delay anti-bloqueio | 16 |
+| Lembretes/WhatsApp | S, I, D | Envio a destino arbitrário, bloqueio do número, vazamento em mensagem | Destinatário sempre do banco, limite diário por usuário (anti-abuso), opt-out obrigatório, mensagens mínimas, delay anti-bloqueio | 16 |
 | Links públicos / Tokens | S, T | Enumeração de links, adivinhação de token de confirmação, replay | Tokens com hash criptográfico, expiração de 7 dias, uso único, rate limit por IP | 10, 16 |
 | Feed de Calendário (.ics) | I, D | Consulta de agenda de terceiros sem autorização | Token aleatório de 64 caracteres hex por voluntário; revoke fácil; apenas dados do próprio membro | 16 |
 | Agendador Cron | S, D | Disparo abusivo de lembretes por invasores | Rota protegida por cabeçalho Bearer com `CRON_SECRET` | 14, 16 |
-| Webhooks de entrada | S, T | Requisição forjada, replay de eventos do WhatsApp | Assinatura HMAC e validação de timestamp | 16 |
+| Webhooks de entrada | S, T | Requisição forjada, replay de eventos do WhatsApp | Assinatura HMAC timing-safe, tolerância de timestamp (5 min), rastreador de replay por eventId/nonce, opt-out imediato em "PARAR" e sanitização de payload | 16 |
+
 | Banco de dados | I, T | Acesso indevido, backup exposto | Privilégio mínimo, TLS obrigatório, backups criptografados | 13 |
 | CI/CD e dependências | T | Pacote malicioso, vulnerabilidade transitiva | `pnpm audit --audit-level=high` obrigatório no CI, overrides no package.json, gitleaks | 14, 15 |
 | Agente de IA | T, I, E | Prompt injection via dados externos, leitura de `.env`, alteração de regras | Permissões restritas, AGENTS.md e .agent/rules/ protegidos | 18 |

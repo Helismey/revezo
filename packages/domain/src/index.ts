@@ -36,6 +36,8 @@ export * from './member/profile.js';
 // Notificações & Lembretes
 export * from './notifications/reminder-calculator.js';
 export * from './notifications/message-templates.js';
+export * from './notifications/webhook-security.js';
 
 // Calendário (.ics)
 export * from './calendar/ics-generator.js';
+

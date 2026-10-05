@@ -3,7 +3,7 @@ import { EmailNotificationChannel } from './channels/email-channel';
 import { PushNotificationChannel } from './channels/push-channel';
 import { WhatsAppNotificationChannel } from './channels/whatsapp-channel';
 import { SmsNotificationChannel } from './channels/sms-channel';
-import { RenderedMessage } from '@revezo/domain';
+import { RenderedMessage, RateLimiterContract, HybridRateLimiter } from '@revezo/domain';
 import { prisma, recordNotificationLog } from '@revezo/db';
 
 export interface DispatchNotificationOptions {
@@ -14,14 +14,34 @@ export interface DispatchNotificationOptions {
   forcedChannel?: 'whatsapp' | 'email' | 'push' | 'sms';
 }
 
+export interface NotificationDispatcherConfig {
+  dailyLimiter?: RateLimiterContract;
+  maxDailyPerUser?: number;
+}
+
 export class NotificationDispatcher {
   private channels: Map<string, NotificationChannel> = new Map();
+  private dailyLimiter: RateLimiterContract;
+  private readonly maxDailyPerUser: number;
 
-  constructor() {
+  constructor(config?: NotificationDispatcherConfig) {
+    this.maxDailyPerUser = config?.maxDailyPerUser ?? 10;
+    this.dailyLimiter =
+      config?.dailyLimiter ??
+      new HybridRateLimiter({
+        maxAttempts: this.maxDailyPerUser,
+        windowMs: 24 * 60 * 60 * 1000,
+        prefix: 'notif_daily_limit',
+      });
+
     this.registerChannel(new EmailNotificationChannel());
     this.registerChannel(new PushNotificationChannel());
     this.registerChannel(new WhatsAppNotificationChannel());
     this.registerChannel(new SmsNotificationChannel());
+  }
+
+  getDailyLimiter(): RateLimiterContract {
+    return this.dailyLimiter;
   }
 
   registerChannel(channel: NotificationChannel) {
@@ -40,6 +60,21 @@ export class NotificationDispatcher {
    */
   async dispatch(options: DispatchNotificationOptions): Promise<ChannelSendResult> {
     const { recipient, message, assignmentId, kind = 'D1', forcedChannel } = options;
+
+    // 1. Verificação anti-abuso: Limite diário de envios por usuário (Regra 16)
+    if (recipient.userId) {
+      const blockStatus = await this.dailyLimiter.isBlocked(recipient.userId);
+      if (blockStatus.blocked) {
+        console.warn(
+          `[NotificationDispatcher] Limite diário de notificações atingido para o usuário ${recipient.userId}`
+        );
+        return {
+          channel: forcedChannel || (recipient.preferredChannel.toLowerCase() as any) || 'email',
+          success: false,
+          error: 'Limite diário de notificações atingido para este usuário.',
+        };
+      }
+    }
 
     // Busca feature flags ativas no banco
     const flags = await prisma.featureFlag.findMany();
@@ -106,6 +141,11 @@ export class NotificationDispatcher {
       }
 
       if (res.success) {
+        // Registra o envio no contador diário anti-abuso
+        if (recipient.userId) {
+          await this.dailyLimiter.recordAttempt(recipient.userId);
+        }
+
         // Pausa preventiva de 1.5s se foi WhatsApp para anti-bloqueio
         if (chName === 'whatsapp') {
           await this.delay(1500);
@@ -116,6 +156,7 @@ export class NotificationDispatcher {
 
     return lastResult;
   }
+
 }
 
 export const notificationDispatcher = new NotificationDispatcher();
