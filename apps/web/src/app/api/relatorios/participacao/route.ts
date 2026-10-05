@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { participationReportQuerySchema } from '@revezo/contracts';
-import { getDepartmentParticipationReport } from '@revezo/db';
+import { getDepartmentParticipationReport, prisma, recordAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 
 export async function GET(request: Request) {
@@ -84,6 +84,25 @@ export async function GET(request: Request) {
     });
 
     if (parsed.data.format === 'csv') {
+      // Registra a exportação de dados na trilha de auditoria (Regra 19 / LGPD)
+      await recordAudit(prisma, {
+        churchId: activeChurch?.id,
+        actorId: session.userId,
+        action: 'DATA_EXPORTED',
+        targetType: 'Report',
+        targetId: 'PARTICIPATION_REPORT_CSV',
+        result: 'SUCCESS',
+        ip: request.headers.get('x-forwarded-for') || '127.0.0.1',
+        meta: {
+          reportType: 'PARTICIPATION_REPORT',
+          departmentId: deptFilter,
+          from: parsed.data.from,
+          to: parsed.data.to,
+          totalVolunteers: report.volunteers.length,
+          totalAssignments: report.totals.totalAssignments,
+        },
+      });
+
       // Gera CSV seguro e com suporte a acentos no Excel
       const headers = ['Voluntário', 'E-mail', 'Departamentos', 'Total Escalado', 'Confirmadas', 'Recusadas', 'Substituídas', 'Pendentes', 'Taxa de Comparecimento'];
       const rows = report.volunteers.map((v) => {

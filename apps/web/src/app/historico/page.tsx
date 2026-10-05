@@ -1,7 +1,7 @@
 import React from 'react';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
-import { prisma, getDepartmentParticipationReport } from '@revezo/db';
+import { prisma, getDepartmentParticipationReport, getScheduleHistory } from '@revezo/db';
 import HistoricoClient from './HistoricoClient';
 
 export default async function HistoricoPage() {
@@ -37,16 +37,39 @@ export default async function HistoricoPage() {
   });
 
   const defaultDeptId = departments[0]?.id;
-  const initialReport = await getDepartmentParticipationReport({
-    departmentId: defaultDeptId,
-    churchId: activeChurch?.id,
-  });
+
+  const [initialReport, rawScheduleHistory] = await Promise.all([
+    getDepartmentParticipationReport({
+      departmentId: defaultDeptId,
+      churchId: activeChurch?.id,
+    }),
+    getScheduleHistory({
+      departmentId: defaultDeptId,
+      churchId: activeChurch?.id,
+      page: 1,
+      limit: 50,
+    }),
+  ]);
+
+  const serializedHistory = {
+    ...rawScheduleHistory,
+    events: rawScheduleHistory.events.map((ev) => ({
+      ...ev,
+      timestamp: ev.timestamp.toISOString(),
+      slot: {
+        ...ev.slot,
+        startsAt: ev.slot.startsAt.toISOString(),
+        endsAt: ev.slot.endsAt.toISOString(),
+      },
+    })),
+  };
 
   return (
     <HistoricoClient
       isAdmin={canViewAllInChurch}
       departments={departments}
       initialReport={initialReport}
+      initialHistory={serializedHistory}
       initialDepartmentId={defaultDeptId || ''}
     />
   );

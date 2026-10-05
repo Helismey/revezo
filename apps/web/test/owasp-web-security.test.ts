@@ -29,7 +29,7 @@ describe('OWASP Web Security & Headers (/api/upload, middleware, next.config)', 
       const globalHeaders = headersConfig.find((h: any) => h.source === '/:path*')?.headers;
       expect(globalHeaders).toBeDefined();
 
-      const headerMap = new Map(globalHeaders.map((h: any) => [h.key, h.value]));
+      const headerMap = new Map(globalHeaders!.map((h: any) => [h.key, h.value]));
 
       expect(headerMap.get('X-Content-Type-Options')).toBe('nosniff');
       expect(headerMap.get('X-Frame-Options')).toBe('DENY');
