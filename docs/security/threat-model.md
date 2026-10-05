@@ -21,6 +21,8 @@ Fronteiras de confiança: navegador/PWA/app ↔ servidor; servidor ↔ banco; se
 
 | Banco de dados | I, T | Acesso indevido, backup exposto | Privilégio mínimo, TLS obrigatório, backups criptografados | 13 |
 | CI/CD e dependências | T | Pacote malicioso, vulnerabilidade transitiva | `pnpm audit --audit-level=high` obrigatório no CI, overrides no package.json, gitleaks | 14, 15 |
+| Trilha de Auditoria (`AuditLog`) | T, R, I | Adulteração de logs, exclusão de evidências, vazamento de PII em metadados | Append-only enforced em runtime (Proxy no client Prisma bloqueia update/delete), mascaramento de telefones/e-mails e redação de segredos (`sanitizeAuditMeta`), acesso restrito a ADMIN_MASTER (`audit:view`) | 11, 19 |
+| Histórico e Relatórios de Escalas | I, E | IDOR em histórico de outros departamentos, extração massiva de dados | Escopo RBAC por departamento gerenciado, auditoria compulsória de exportações de CSV (`DATA_EXPORTED`) | 11, 19 |
 | Agente de IA | T, I, E | Prompt injection via dados externos, leitura de `.env`, alteração de regras | Permissões restritas, AGENTS.md e .agent/rules/ protegidos | 18 |
 | App Mobile & PWA | I, T | Cache de dados de terceiros offline, token vazado em bundle | Cache restrito exclusivamente à própria escala do voluntário, limpeza no logout | 09, 17 |
 
