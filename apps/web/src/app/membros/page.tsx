@@ -3,7 +3,7 @@ import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { MembrosClient, MemberListItem, DepartmentOption } from './MembrosClient';
-import { can } from '@revezo/domain';
+import { can, maskEmail, maskPhoneNumber } from '@revezo/domain';
 
 export default async function MembrosPage() {
   const session = await getSession();
@@ -87,31 +87,41 @@ export default async function MembrosPage() {
     }),
   ]);
 
-  const memberListItems: MemberListItem[] = users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    globalRole: u.globalRole,
-    phonePrimary: u.phonePrimary,
-    whatsapp: u.whatsapp,
-    photoUrl: u.photoUrl,
-    status: u.status as MemberListItem['status'],
-    isMinor: u.isMinor,
-    guardianName: u.guardianName,
-    guardianPhone: u.guardianPhone,
-    birthDate: u.birthDate ? u.birthDate.toISOString().split('T')[0] : null,
-    notes: u.notes,
-    memberships: u.memberships.map((m) => ({
-      id: m.id,
-      departmentId: m.departmentId,
-      departmentName: m.department.name,
-      role: m.role as 'MANAGER' | 'MEMBER',
-      functions: m.functions.map((f) => ({
-        id: f.function.id,
-        name: f.function.name,
+  const memberListItems: MemberListItem[] = users.map((u) => {
+    const canViewFullPii =
+      canManageAll ||
+      u.id === session.userId ||
+      u.memberships.some((m) => managedDeptIds.includes(m.departmentId));
+
+    return {
+      id: u.id,
+      name: u.name,
+      email: canViewFullPii ? u.email : maskEmail(u.email),
+      globalRole: u.globalRole,
+      phonePrimary:
+        canViewFullPii ? u.phonePrimary : u.phonePrimary ? maskPhoneNumber(u.phonePrimary) : null,
+      whatsapp:
+        canViewFullPii ? u.whatsapp : u.whatsapp ? maskPhoneNumber(u.whatsapp) : null,
+      photoUrl: u.photoUrl,
+      status: u.status as MemberListItem['status'],
+      isMinor: u.isMinor,
+      guardianName: canViewFullPii ? u.guardianName : null,
+      guardianPhone:
+        canViewFullPii ? u.guardianPhone : u.guardianPhone ? maskPhoneNumber(u.guardianPhone) : null,
+      birthDate: canViewFullPii && u.birthDate ? u.birthDate.toISOString().split('T')[0] : null,
+      notes: canViewFullPii ? u.notes : null,
+      memberships: u.memberships.map((m) => ({
+        id: m.id,
+        departmentId: m.departmentId,
+        departmentName: m.department.name,
+        role: m.role as 'MANAGER' | 'MEMBER',
+        functions: m.functions.map((f) => ({
+          id: f.function.id,
+          name: f.function.name,
+        })),
       })),
-    })),
-  }));
+    };
+  });
 
   const departmentOptions: DepartmentOption[] = departments.map((d) => ({
     id: d.id,

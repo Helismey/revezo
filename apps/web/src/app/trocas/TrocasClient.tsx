@@ -356,8 +356,8 @@ export default function TrocasClient({
                         </div>
 
                         <div className="text-xs text-ink-muted sm:text-right">
-                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' })} •{' '}
-                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Sao_Paulo' })} •{' '}
+                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                         </div>
                       </div>
 
@@ -429,8 +429,8 @@ export default function TrocasClient({
                         </div>
 
                         <div className="text-xs text-ink-muted sm:text-right">
-                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' })} •{' '}
-                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Sao_Paulo' })} •{' '}
+                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                         </div>
                       </div>
 
@@ -513,8 +513,8 @@ export default function TrocasClient({
                         </div>
 
                         <div className="text-xs text-ink-muted sm:text-right">
-                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' })} •{' '}
-                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {startsAt.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Sao_Paulo' })} •{' '}
+                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                         </div>
                       </div>
 
@@ -576,7 +576,7 @@ export default function TrocasClient({
                 >
                   {myFutureAssignments.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.programTitle} — {a.departmentName} ({new Date(a.startsAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})
+                      {a.programTitle} — {a.departmentName} ({new Date(a.startsAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })})
                     </option>
                   ))}
                 </select>

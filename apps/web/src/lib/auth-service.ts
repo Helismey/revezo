@@ -26,7 +26,23 @@ import { RegisterInput } from '@revezo/contracts';
 import QRCode from 'qrcode';
 
 const SESSION_COOKIE_NAME = 'revezo_sess';
-const SESSION_SECRET = process.env.AUTH_SECRET || 'chave-secreta-padrao-desenvolvimento-revezo-32b';
+
+export function resolveSessionSecret(
+  envSecret = process.env.AUTH_SECRET,
+  nodeEnv = process.env.NODE_ENV
+): string {
+  if (!envSecret || envSecret.trim().length < 32) {
+    if (nodeEnv === 'production') {
+      throw new Error(
+        'Configuração crítica ausente: AUTH_SECRET deve possuir pelo menos 32 caracteres em produção.'
+      );
+    }
+    return 'chave-secreta-padrao-desenvolvimento-revezo-32b';
+  }
+  return envSecret;
+}
+
+const SESSION_SECRET = resolveSessionSecret();
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 dias
 
 // Rate limiters híbridos (Upstash Redis REST em produção serverless / memória local em desenvolvimento)

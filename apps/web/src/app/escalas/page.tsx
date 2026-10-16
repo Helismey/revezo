@@ -127,6 +127,10 @@ export default async function EscalasPage() {
     };
   });
 
+  const managedDeptIds = (userContext?.departmentMemberships ?? [])
+    .filter((m) => m.role === 'MANAGER')
+    .map((m) => m.departmentId);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -149,6 +153,8 @@ export default async function EscalasPage() {
           programs={serializedPrograms}
           volunteers={serializedVolunteers}
           isManagerOrAdmin={isAuthorized}
+          canManageAll={Boolean(isAdmin || isPastor || isElder)}
+          managedDepartmentIds={managedDeptIds}
         />
       )}
     </div>

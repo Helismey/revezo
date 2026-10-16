@@ -692,6 +692,8 @@ export function MembrosClient({
           filteredMembers.map((member) => {
             const canViewContacts =
               isAdmin ||
+              isPastor ||
+              isElder ||
               member.memberships.some((m) => managedDepartmentIds.includes(m.departmentId));
 
             return (

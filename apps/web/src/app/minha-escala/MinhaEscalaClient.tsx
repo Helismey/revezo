@@ -63,7 +63,12 @@ export function MinhaEscalaClient({
       const timeStr = `${startsAt.toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
-      })} - ${endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+        timeZone: 'America/Sao_Paulo',
+      })} - ${endsAt.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'America/Sao_Paulo',
+      })}`;
 
       return {
         id: asg.id,
@@ -174,11 +179,21 @@ export function MinhaEscalaClient({
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
+                      timeZone: 'America/Sao_Paulo',
                     })}{' '}
                     •{' '}
                     <span className="tabular-nums">
-                      {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} às{' '}
-                      {endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {startsAt.toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'America/Sao_Paulo',
+                      })}{' '}
+                      às{' '}
+                      {endsAt.toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'America/Sao_Paulo',
+                      })}
                     </span>
                   </p>
 
@@ -277,11 +292,13 @@ export function MinhaEscalaClient({
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
+                    timeZone: 'America/Sao_Paulo',
                   })}{' '}
                   às{' '}
                   {new Date(declineTarget.slot.startsAt).toLocaleTimeString('pt-BR', {
                     hour: '2-digit',
                     minute: '2-digit',
+                    timeZone: 'America/Sao_Paulo',
                   })}
                 </p>
               </div>

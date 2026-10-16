@@ -32,13 +32,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
     }
 
+    const managedDeptIds = userContext.departmentMemberships
+      .filter((m) => m.role === 'MANAGER')
+      .map((m) => m.departmentId);
+
     const allowed = can(userContext, 'registration:reject', {
       churchId: targetUser.churchId || undefined,
+      departmentId: parsed.data.departmentId,
+      departmentIds: managedDeptIds,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para rejeitar cadastros desta congregação' },
+        { success: false, error: 'Você não tem permissão para rejeitar cadastros desta congregação ou departamento' },
         { status: 403 }
       );
     }

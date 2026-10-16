@@ -34,6 +34,7 @@ export type ApproveMemberInput = z.infer<typeof approveMemberSchema>;
 
 export const rejectMemberSchema = z.object({
   userId: z.string().min(1, 'ID do usuário obrigatório'),
+  departmentId: z.string().optional(),
   reason: z.string().max(200).optional(),
 });
 

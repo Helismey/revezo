@@ -96,7 +96,7 @@ export default async function DepartamentosPage() {
   const serializedActiveUsers: ActiveUserOption[] = activeUsers.map((u) => ({
     id: u.id,
     name: u.name,
-    email: u.email,
+    email: canManageAll ? u.email : maskEmail(u.email),
   }));
 
   return (

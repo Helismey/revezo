@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
+import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { can } from '@revezo/domain';
@@ -165,12 +166,15 @@ export default async function DashboardPage() {
   // Server Actions para confirmar ou recusar escala
   async function confirmAction(formData: FormData) {
     'use server';
+    const currentSession = await getSession();
+    if (!currentSession) return;
+
     const assignmentId = formData.get('assignmentId') as string;
     if (!assignmentId) return;
 
     await confirmAssignmentWithAudit({
       assignmentId,
-      actorId: session?.userId,
+      actorId: currentSession.userId,
     });
 
     revalidatePath('/');
@@ -178,15 +182,27 @@ export default async function DashboardPage() {
 
   async function declineAction(formData: FormData) {
     'use server';
+    const currentSession = await getSession();
+    if (!currentSession) return;
+
     const assignmentId = formData.get('assignmentId') as string;
     const reason = formData.get('reason') as string;
     if (!assignmentId) return;
 
-    await declineWithAutoSubstitution({
+    const result = await declineWithAutoSubstitution({
       assignmentId,
       reason,
-      actorId: session?.userId,
+      actorId: currentSession.userId,
     });
+
+    if (result.autoSubstituted && result.newAssignment) {
+      notifyAutoSubstitution({
+        substituteAssignmentId: result.newAssignment.id,
+        originalAssignmentId: assignmentId,
+        reason,
+        actorId: currentSession.userId,
+      }).catch((err) => console.error('Erro ao notificar substituto:', err));
+    }
 
     revalidatePath('/');
     revalidatePath('/slots-abertos');

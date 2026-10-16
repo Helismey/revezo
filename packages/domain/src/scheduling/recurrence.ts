@@ -54,3 +54,15 @@ export function formatISODateOnly(date: Date): string {
   const d = String(date.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * Converte uma data civil (AAAA-MM-DD) e um horário local em America/Sao_Paulo (HH:mm)
+ * para um objeto Date em UTC (considerando o offset fixo -03:00 do fuso de Brasília).
+ */
+export function parseSaoPauloDateTimeToUtc(dateStr: string, timeStr = '09:00'): Date {
+  const [rawH = '09', rawM = '00'] = timeStr.split(':');
+  const hh = String(Number(rawH) || 0).padStart(2, '0');
+  const mm = String(Number(rawM) || 0).padStart(2, '0');
+  return new Date(`${dateStr}T${hh}:${mm}:00.000-03:00`);
+}
+

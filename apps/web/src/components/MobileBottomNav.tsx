@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuItem, MenuBadgeCounts } from '@revezo/domain';
+import { isCapacitorNative, removeSecureToken } from '@/lib/capacitor-adapter';
+import { clearClientUserCache } from './PwaRegister';
 import {
   House,
   CalendarCheck,
@@ -174,7 +176,20 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
                 );
               })}
 
-              <form action={onLogout} className="pt-2 border-t border-line mt-2">
+              <form
+                action={onLogout}
+                onSubmit={async () => {
+                  clearClientUserCache();
+                  if (isCapacitorNative()) {
+                    try {
+                      await removeSecureToken();
+                    } catch {
+                      // Ignora falha de limpeza local
+                    }
+                  }
+                }}
+                className="pt-2 border-t border-line mt-2"
+              >
                 <button
                   type="submit"
                   className="flex items-center space-x-3 w-full px-3 py-3 rounded-control text-danger hover:bg-danger-soft min-h-touch text-left"

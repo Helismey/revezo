@@ -248,4 +248,23 @@ describe('Webhook WhatsApp Security & Opt-Out Route Handler (/api/webhooks/whats
     expect(res.status).toBe(200);
     expect(data.action).toBe('received');
   });
+
+  it('bloqueia mutação de opt-out (401) mesmo fora de produção se WEBHOOK_SECRET não estiver definido', async () => {
+    delete process.env.WEBHOOK_SECRET;
+
+    const req = new Request('https://escala.igreja.local/api/webhooks/whatsapp', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone: '5562987654321',
+        text: 'PARAR',
+      }),
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(data.error).toContain('WEBHOOK_SECRET é obrigatório');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
 });

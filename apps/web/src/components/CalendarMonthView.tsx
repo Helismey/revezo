@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { CaretLeft, CaretRight, Clock, Buildings, Plus, X } from '@/components/Icons';
+import { getLocalDateString } from '@revezo/domain';
 
 export interface CalendarEventItem {
   id: string;
@@ -72,14 +73,14 @@ export function CalendarMonthView({
     return events.filter((e) => e.departmentId === selectedDepartmentId);
   }, [events, selectedDepartmentId]);
 
-  // Agrupa eventos por data no formato YYYY-MM-DD
+  // Agrupa eventos por data no formato YYYY-MM-DD (America/Sao_Paulo)
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEventItem[]>();
     for (const ev of filteredEvents) {
       const d = typeof ev.date === 'string' ? new Date(ev.date) : ev.date;
       if (isNaN(d.getTime())) continue;
-      // Normaliza para string YYYY-MM-DD
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      // Normaliza para string YYYY-MM-DD no fuso America/Sao_Paulo
+      const dateKey = getLocalDateString(d, 'America/Sao_Paulo');
       const list = map.get(dateKey) || [];
       list.push(ev);
       map.set(dateKey, list);

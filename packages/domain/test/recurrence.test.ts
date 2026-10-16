@@ -1,10 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { generateRecurrenceDates, formatISODateOnly } from '../src/scheduling/recurrence.js';
+import {
+  generateRecurrenceDates,
+  formatISODateOnly,
+  parseSaoPauloDateTimeToUtc,
+} from '../src/scheduling/recurrence.js';
 
 describe('Recurrence & Batch Programs Generator', () => {
   it('formats dates as YYYY-MM-DD correctly', () => {
     const d = new Date(Date.UTC(2026, 9, 3, 12, 0, 0)); // Oct 3, 2026
     expect(formatISODateOnly(d)).toBe('2026-10-03');
+  });
+
+  it('converts America/Sao_Paulo local date and time (-03:00) to UTC accurately', () => {
+    const morning = parseSaoPauloDateTimeToUtc('2026-10-03', '09:00');
+    expect(morning.toISOString()).toBe('2026-10-03T12:00:00.000Z');
+
+    const evening = parseSaoPauloDateTimeToUtc('2026-10-03', '21:30');
+    expect(evening.toISOString()).toBe('2026-10-04T00:30:00.000Z');
   });
 
   it('generates weekly dates for selected days of week', () => {

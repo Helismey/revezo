@@ -9,7 +9,8 @@ import { isCapacitorNative, setSecureToken } from '@/lib/capacitor-adapter';
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/';
+  const rawFrom = searchParams.get('from') || '/';
+  const from = rawFrom.startsWith('/') && !rawFrom.startsWith('//') && !rawFrom.includes('\\') ? rawFrom : '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

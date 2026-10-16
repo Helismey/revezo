@@ -71,7 +71,9 @@ export function middleware(request: NextRequest) {
   // Webhooks (/api/webhooks) usam HMAC criptográfico e cron (/api/cron) usa Bearer token
   const isWebhookOrCron = pathname.startsWith('/api/webhooks') || pathname.startsWith('/api/cron');
   if (pathname.startsWith('/api/') && MUTATING_METHODS.has(request.method) && !isWebhookOrCron) {
-    if (origin && !isAllowedOrigin(origin, host)) {
+    const referer = request.headers.get('referer');
+    const sourceToVerify = origin || referer;
+    if (sourceToVerify && !isAllowedOrigin(sourceToVerify, host)) {
       return NextResponse.json(
         { success: false, error: 'Origem não autorizada (proteção CSRF/CORS).' },
         { status: 403 }

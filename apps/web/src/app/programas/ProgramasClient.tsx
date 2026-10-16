@@ -16,7 +16,7 @@ import {
   Trash,
   ShieldCheck,
 } from '@/components/Icons';
-import { generateRecurrenceDates } from '@revezo/domain';
+import { generateRecurrenceDates, parseSaoPauloDateTimeToUtc } from '@revezo/domain';
 
 export interface DepartmentOption {
   id: string;
@@ -233,8 +233,8 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
 
     try {
       const formattedSlots = slots.map((s) => {
-        const startsAt = new Date(`${date}T${s.startsAtTime}:00`);
-        const endsAt = new Date(`${date}T${s.endsAtTime}:00`);
+        const startsAt = parseSaoPauloDateTimeToUtc(date, s.startsAtTime);
+        const endsAt = parseSaoPauloDateTimeToUtc(date, s.endsAtTime);
         return {
           title: s.title,
           departmentId: s.departmentId,
@@ -250,7 +250,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          date: new Date(date).toISOString(),
+          date: parseSaoPauloDateTimeToUtc(date, slots[0]?.startsAtTime || '09:00').toISOString(),
           departmentIds: selectedDeptIds,
           slots: formattedSlots,
         }),
@@ -495,6 +495,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
+                      timeZone: 'America/Sao_Paulo',
                     })}{' '}
                     • {prog.slotsCount} partes/vagas
                   </p>

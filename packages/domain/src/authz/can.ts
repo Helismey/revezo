@@ -319,7 +319,13 @@ export function can(
     // Aprovações e rejeições de cadastro
     case 'registration:approve':
     case 'registration:reject':
-      return isManagerOf(resource?.departmentId);
+      if (resource?.departmentId) {
+        return isManagerOf(resource.departmentId);
+      }
+      if (resource?.departmentIds) {
+        return isManagerOfAny(resource.departmentIds);
+      }
+      return false;
 
     // Departamentos e Funções
     case 'department:view':

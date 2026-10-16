@@ -85,6 +85,12 @@ export async function POST(request: Request) {
 
     // 5. Tratamento de Opt-Out imediato e resposta automática a "PARAR"
     if (isOptOutKeyword(extracted.messageText) && extracted.senderPhone) {
+      if (!webhookSecret) {
+        return NextResponse.json(
+          { error: 'WEBHOOK_SECRET é obrigatório para processar mutações de opt-out' },
+          { status: 401 }
+        );
+      }
       const cleanDigits = extracted.senderPhone;
       const without55 = cleanDigits.startsWith('55') && cleanDigits.length >= 12 ? cleanDigits.slice(2) : cleanDigits;
 

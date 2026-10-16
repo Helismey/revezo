@@ -61,9 +61,17 @@ interface EscalasClientProps {
   programs: SerializedProgram[];
   volunteers: AvailableVolunteer[];
   isManagerOrAdmin: boolean;
+  canManageAll?: boolean;
+  managedDepartmentIds?: string[];
 }
 
-export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: EscalasClientProps) {
+export function EscalasClient({
+  programs,
+  volunteers,
+  isManagerOrAdmin,
+  canManageAll = false,
+  managedDepartmentIds = [],
+}: EscalasClientProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
     programs[0]?.id || ''
   );
@@ -352,6 +360,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                   day: 'numeric',
                   month: 'short',
                   year: 'numeric',
+                  timeZone: 'America/Sao_Paulo',
                 })}
               </option>
             ))}
@@ -404,6 +413,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
               const startsAt = new Date(slot.startsAt);
               const endsAt = new Date(slot.endsAt);
               const isSlotOpen = slot.assignments.length < slot.requiredCount;
+              const canManageSlot = canManageAll || managedDepartmentIds.includes(slot.departmentId);
 
               // Voluntários compatíveis com o departamento do slot
               const candidateVolunteers = volunteers.filter((v) =>
@@ -436,13 +446,13 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                       <span className="text-xs text-ink-muted">
                         {slot.departmentName} •{' '}
                         <span className="tabular-nums">
-                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}{' '}
-                          às {endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}{' '}
+                          às {endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                         </span>
                       </span>
                     </div>
 
-                    {isManagerOrAdmin && (
+                    {canManageSlot && (
                       <button
                         type="button"
                         onClick={() => {
@@ -464,7 +474,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                   </div>
 
                   {/* Formulário inline para escalar voluntário */}
-                  {activeSlotId === slot.id && (
+                  {activeSlotId === slot.id && canManageSlot && (
                     <div className="p-3 bg-bg rounded-control border border-line space-y-3 mt-2">
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <select
@@ -558,7 +568,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                             </div>
 
                             <div className="flex items-center space-x-2">
-                              {asg.status === 'PENDING_APPROVAL' && isManagerOrAdmin && (
+                              {asg.status === 'PENDING_APPROVAL' && canManageSlot && (
                                 <button
                                   type="button"
                                   onClick={() => handleQuickApprove(asg.id)}
@@ -569,7 +579,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                                 </button>
                               )}
 
-                              {asg.status !== 'PENDING_APPROVAL' && (
+                              {asg.status !== 'PENDING_APPROVAL' && canManageSlot && (
                                 <button
                                   type="button"
                                   onClick={() => handleCopyConfirmationLink(asg.id)}
@@ -590,7 +600,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                                 </button>
                               )}
 
-                              {isManagerOrAdmin && (
+                              {canManageSlot && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemove(asg.id)}
@@ -718,6 +728,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                                     {startsAt.toLocaleTimeString('pt-BR', {
                                       hour: '2-digit',
                                       minute: '2-digit',
+                                      timeZone: 'America/Sao_Paulo',
                                     })}
                                   </span>
                                 </div>

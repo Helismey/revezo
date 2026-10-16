@@ -9,7 +9,7 @@ import {
   PendingScheduleAssignment,
   ActiveVolunteerOption,
 } from './AprovacoesClient';
-import { can } from '@revezo/domain';
+import { can, maskEmail, maskPhoneNumber } from '@revezo/domain';
 
 export default async function AprovacoesPage() {
   const session = await getSession();
@@ -21,17 +21,6 @@ export default async function AprovacoesPage() {
   const churchContext = await getActiveChurchContext();
   const activeChurchId = churchContext.church?.id;
 
-  const canApproveRegistrations = can(userContext, 'registration:approve', { churchId: activeChurchId });
-  const canApproveSchedules =
-    userContext?.globalRole === 'ADMIN_MASTER' ||
-    userContext?.globalRole === 'PASTOR' ||
-    userContext?.globalRole === 'ELDER' ||
-    userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
-
-  if (!canApproveRegistrations && !canApproveSchedules) {
-    redirect('/');
-  }
-
   const isMasterOrElder =
     userContext?.globalRole === 'ADMIN_MASTER' ||
     userContext?.globalRole === 'PASTOR' ||
@@ -41,6 +30,18 @@ export default async function AprovacoesPage() {
     userContext?.departmentMemberships
       .filter((m) => m.role === 'MANAGER')
       .map((m) => m.departmentId) || [];
+
+  const canApproveRegistrations = can(userContext, 'registration:approve', {
+    churchId: activeChurchId,
+    departmentIds: managedDeptIds,
+  });
+  const canApproveSchedules =
+    isMasterOrElder ||
+    userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
+
+  if (!canApproveRegistrations && !canApproveSchedules) {
+    redirect('/');
+  }
 
   // 1. Novos voluntários pendentes de aprovação
   const pendingWhere =
@@ -132,10 +133,12 @@ export default async function AprovacoesPage() {
   const serializedPending: PendingUser[] = pending.map((u) => ({
     id: u.id,
     name: u.name,
-    email: u.email,
-    phonePrimary: u.phonePrimary,
-    whatsapp: u.whatsapp,
-    birthDate: u.birthDate?.toISOString() || null,
+    email: isMasterOrElder ? u.email : maskEmail(u.email),
+    phonePrimary:
+      isMasterOrElder ? u.phonePrimary : u.phonePrimary ? maskPhoneNumber(u.phonePrimary) : null,
+    whatsapp:
+      isMasterOrElder ? u.whatsapp : u.whatsapp ? maskPhoneNumber(u.whatsapp) : null,
+    birthDate: isMasterOrElder && u.birthDate ? u.birthDate.toISOString() : null,
     createdAt: u.createdAt.toISOString(),
   }));
 

@@ -31,6 +31,8 @@ import {
   canCancelSwap,
   validateSwapProposal,
   generateRecurrenceDates,
+  formatISODateOnly,
+  parseSaoPauloDateTimeToUtc,
   generateRefreshTokenPair,
   hashRefreshToken,
   evaluateRefreshToken,
@@ -229,6 +231,29 @@ export async function declineAssignmentWithAudit(params: DeclineAssignmentParams
   const { assignmentId, reason, actorId, ip } = params;
 
   return await prisma.$transaction(async (tx) => {
+    const existing = await tx.assignment.findUnique({
+      where: { id: assignmentId },
+    });
+
+    if (!existing) {
+      throw new Error('Escala não encontrada.');
+    }
+
+    if (actorId && existing.userId !== actorId) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'ASSIGNMENT_DECLINE_DENIED',
+          targetType: 'Assignment',
+          targetId: assignmentId,
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'IDOR_ATTEMPT', ownerUserId: existing.userId },
+        },
+      });
+      throw new Error('Operação negada: você só pode desmarcar escalas atribuídas a você.');
+    }
+
     const updated = await tx.assignment.update({
       where: { id: assignmentId },
       data: {
@@ -239,7 +264,7 @@ export async function declineAssignmentWithAudit(params: DeclineAssignmentParams
 
     await tx.auditLog.create({
       data: {
-        actorId,
+        actorId: actorId || existing.userId,
         action: 'ASSIGNMENT_DECLINED',
         targetType: 'Assignment',
         targetId: assignmentId,
@@ -263,6 +288,29 @@ export async function confirmAssignmentWithAudit(params: ConfirmAssignmentParams
   const { assignmentId, actorId, ip } = params;
 
   return await prisma.$transaction(async (tx) => {
+    const existing = await tx.assignment.findUnique({
+      where: { id: assignmentId },
+    });
+
+    if (!existing) {
+      throw new Error('Escala não encontrada.');
+    }
+
+    if (actorId && existing.userId !== actorId) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'ASSIGNMENT_CONFIRM_DENIED',
+          targetType: 'Assignment',
+          targetId: assignmentId,
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'IDOR_ATTEMPT', ownerUserId: existing.userId },
+        },
+      });
+      throw new Error('Operação negada: você só pode confirmar escalas atribuídas a você.');
+    }
+
     const updated = await tx.assignment.update({
       where: { id: assignmentId },
       data: {
@@ -272,7 +320,7 @@ export async function confirmAssignmentWithAudit(params: ConfirmAssignmentParams
 
     await tx.auditLog.create({
       data: {
-        actorId,
+        actorId: actorId || existing.userId,
         action: 'ASSIGNMENT_CONFIRMED',
         targetType: 'Assignment',
         targetId: assignmentId,
@@ -2475,6 +2523,22 @@ export async function declineWithAutoSubstitution(params: {
       throw new Error('Escala não encontrada.');
     }
 
+    if (actorId && assignment.userId !== actorId) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: assignment.slot.department.churchId || undefined,
+          action: 'ASSIGNMENT_DECLINE_DENIED',
+          targetType: 'Assignment',
+          targetId: assignmentId,
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'IDOR_ATTEMPT', ownerUserId: assignment.userId },
+        },
+      });
+      throw new Error('Operação negada: você só pode desmarcar escalas atribuídas a você.');
+    }
+
     // 2. Atualiza a escala original para DECLINED
     const declinedAssignment = await tx.assignment.update({
       where: { id: assignmentId },
@@ -4467,17 +4531,13 @@ export async function createBatchProgramsWithAudit(params: CreateBatchProgramsPa
   }
 
   const recurrenceGroupId = randomUUID();
-  const [progHour, progMin] = time.split(':').map(Number);
 
   return await prisma.$transaction(async (tx) => {
     const createdPrograms = [];
 
     for (const d of dates) {
-      const y = d.getUTCFullYear();
-      const m = d.getUTCMonth();
-      const day = d.getUTCDate();
-
-      const programDate = new Date(Date.UTC(y, m, day, progHour || 9, progMin || 0, 0));
+      const dateStr = formatISODateOnly(d);
+      const programDate = parseSaoPauloDateTimeToUtc(dateStr, time);
 
       const prog = await tx.program.create({
         data: {
@@ -4494,10 +4554,8 @@ export async function createBatchProgramsWithAudit(params: CreateBatchProgramsPa
           },
           slots: {
             create: slots.map((s) => {
-              const [startH, startM] = s.startTime.split(':').map(Number);
-              const [endH, endM] = s.endTime.split(':').map(Number);
-              const startsAt = new Date(Date.UTC(y, m, day, startH || 9, startM || 0, 0));
-              const endsAt = new Date(Date.UTC(y, m, day, endH || 10, endM || 0, 0));
+              const startsAt = parseSaoPauloDateTimeToUtc(dateStr, s.startTime || '09:00');
+              const endsAt = parseSaoPauloDateTimeToUtc(dateStr, s.endTime || '10:00');
 
               return {
                 title: s.title,

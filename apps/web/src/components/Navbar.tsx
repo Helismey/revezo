@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuItem, MenuBadgeCounts } from '@revezo/domain';
 import { isCapacitorNative, removeSecureToken } from '@/lib/capacitor-adapter';
+import { clearClientUserCache } from './PwaRegister';
 import {
   House,
   CalendarCheck,
@@ -124,6 +125,7 @@ export function Navbar({
             <form
               action={onLogout}
               onSubmit={async () => {
+                clearClientUserCache();
                 if (isCapacitorNative()) {
                   try {
                     await removeSecureToken();

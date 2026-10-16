@@ -29,7 +29,7 @@ export default async function ConfirmarPage({
   }
 
   let verification;
-  if (token === 'e2e-token-valido-teste') {
+  if (process.env.NODE_ENV !== 'production' && token === 'e2e-token-valido-teste') {
     const mockStartsAt = new Date(Date.now() + 86400000 * 3);
     const mockEndsAt = new Date(mockStartsAt.getTime() + 7200000);
     verification = {
