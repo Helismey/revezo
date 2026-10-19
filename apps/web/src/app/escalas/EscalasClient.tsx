@@ -14,6 +14,7 @@ import {
   Printer,
 } from '@/components/Icons';
 import { SchedulePrintModal } from '@/components/SchedulePrintModal';
+import { ConfirmDialog } from '@/components/Modal';
 import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@revezo/domain';
 
 export interface SerializedSlot {
@@ -297,8 +298,9 @@ export function EscalasClient({
     }
   };
 
+  const [pendingRemoveAssignmentId, setPendingRemoveAssignmentId] = useState<string | null>(null);
+
   const handleRemove = async (assignmentId: string) => {
-    if (!confirm('Deseja realmente remover este voluntário da escala?')) return;
     setMessage(null);
     setLoading(true);
 
@@ -323,6 +325,7 @@ export function EscalasClient({
         type: 'sucesso',
         text: 'Escala removida com sucesso.',
       });
+      setPendingRemoveAssignmentId(null);
       window.location.reload();
     } catch {
       setMessage({
@@ -603,7 +606,7 @@ export function EscalasClient({
                               {canManageSlot && (
                                 <button
                                   type="button"
-                                  onClick={() => handleRemove(asg.id)}
+                                  onClick={() => setPendingRemoveAssignmentId(asg.id)}
                                   className="text-xs text-ink-muted hover:text-danger font-semibold p-1.5 min-h-touch min-w-touch flex items-center justify-center rounded-control transition-colors"
                                   title="Remover da escala"
                                 >
@@ -625,7 +628,12 @@ export function EscalasClient({
 
       {/* Modal de Prévia e Aplicação de Geração Automática */}
       {showAutoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Prévia da Geração Automática"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-2xl w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
             {/* Cabeçalho do Modal */}
             <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between bg-bg/50">
@@ -813,6 +821,21 @@ export function EscalasClient({
         onClose={() => setShowPrintModal(false)}
         programs={programs}
         currentProgramId={selectedProgramId}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingRemoveAssignmentId)}
+        onClose={() => setPendingRemoveAssignmentId(null)}
+        onConfirm={() => {
+          if (pendingRemoveAssignmentId) {
+            void handleRemove(pendingRemoveAssignmentId);
+          }
+        }}
+        title="Remover Voluntário da Escala"
+        description="Deseja realmente remover este voluntário desta função na escala?"
+        confirmLabel="Remover"
+        variant="danger"
+        loading={loading}
       />
     </div>
   );

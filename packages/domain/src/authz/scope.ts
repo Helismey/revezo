@@ -71,6 +71,32 @@ export function extractUserScope(user: UserContext | null | undefined): UserScop
   };
 }
 
+export interface DepartmentScopeWhere {
+  id?: string | { in: string[] };
+  churchId?: string | { in: string[] };
+}
+
+export interface AssignmentScopeWhere {
+  id?: string;
+  userId?: string;
+  slot?: {
+    departmentId?: { in: string[] };
+    program?: {
+      churchId?: string | { in: string[] };
+    };
+  };
+}
+
+export interface MemberScopeWhere {
+  id?: string;
+  churchId?: string | { in: string[] };
+  memberships?: {
+    some: {
+      departmentId: { in: string[] };
+    };
+  };
+}
+
 /**
  * Cria cláusula de busca scoped no Prisma para Departamentos,
  * garantindo que consultas sejam filtradas pelo escopo do usuário (Anti-IDOR).
@@ -79,7 +105,7 @@ export function buildDepartmentScopeWhere(
   user: UserContext | null | undefined,
   action: Action,
   targetChurchId?: string | null
-): Record<string, any> {
+): DepartmentScopeWhere {
   const scope = extractUserScope(user);
 
   if (!user || user.status !== 'ACTIVE') {
@@ -137,7 +163,7 @@ export function buildAssignmentScopeWhere(
   user: UserContext | null | undefined,
   action: Action,
   targetChurchId?: string | null
-): Record<string, any> {
+): AssignmentScopeWhere {
   const scope = extractUserScope(user);
 
   if (!user || user.status !== 'ACTIVE') {
@@ -197,7 +223,7 @@ export function buildMemberScopeWhere(
   user: UserContext | null | undefined,
   action: Action,
   targetChurchId?: string | null
-): Record<string, any> {
+): MemberScopeWhere {
   const scope = extractUserScope(user);
 
   if (!user || user.status !== 'ACTIVE') {

@@ -1097,7 +1097,12 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
 
       {/* Modal de Setup do MFA */}
       {setupModalOpen && setupData && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Configurar Autenticação em Duas Etapas"
+          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-lg w-full p-6 shadow-xl space-y-6 my-8 animate-in fade-in zoom-in-95 duration-150">
             <div>
               <h3 className="font-display font-bold text-xl text-ink">
@@ -1230,7 +1235,12 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
 
       {/* Modal de Desativação do MFA */}
       {disableModalOpen && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Desativar verificação em duas etapas"
+          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div>
               <h3 className="font-display font-bold text-lg text-ink">
@@ -1283,7 +1293,12 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
 
       {/* Modal de Exclusão de Dados (LGPD) */}
       {eraseModalOpen && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Eliminar Dados da Conta (LGPD)"
+          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div>
               <h3 className="font-display font-bold text-lg text-danger">

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
-import { X } from '@/components/Icons';
+import { Modal, ConfirmDialog } from '@/components/Modal';
 
 interface PotentialTarget {
   id: string;
@@ -83,6 +83,8 @@ export default function TrocasClient({
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(myFutureAssignments[0]?.id || '');
   const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
   const [swapReason, setSwapReason] = useState('');
+  const [cancelSwapId, setCancelSwapId] = useState<string | null>(null);
+  const [rejectSwapId, setRejectSwapId] = useState<string | null>(null);
 
   // Carrega lista de trocas
   async function loadSwaps() {
@@ -177,8 +179,6 @@ export default function TrocasClient({
 
   // Cancelar pedido
   async function handleCancel(swapRequestId: string) {
-    if (!confirm('Deseja realmente cancelar este pedido de troca?')) return;
-
     setSubmitting(true);
     setError(null);
 
@@ -192,6 +192,7 @@ export default function TrocasClient({
       const data = await res.json();
       if (data.success) {
         setSuccess('Pedido de troca cancelado.');
+        setCancelSwapId(null);
         loadSwaps();
       } else {
         setError(data.error || 'Erro ao cancelar pedido');
@@ -386,10 +387,7 @@ export default function TrocasClient({
                           </button>
                           <button
                             disabled={submitting}
-                            onClick={() => {
-                              const notes = prompt('Motivo da rejeição (opcional):') || undefined;
-                              handleReview(item.id, 'REJECT', notes);
-                            }}
+                            onClick={() => setRejectSwapId(item.id)}
                             className="px-3.5 py-2 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold text-xs sm:text-sm rounded-control min-h-touch"
                           >
                             Rejeitar
@@ -534,7 +532,7 @@ export default function TrocasClient({
                         <div className="pt-2 flex justify-end">
                           <button
                             disabled={submitting}
-                            onClick={() => handleCancel(item.id)}
+                            onClick={() => setCancelSwapId(item.id)}
                             className="text-xs text-danger hover:underline font-semibold"
                           >
                             Cancelar Pedido
@@ -551,92 +549,115 @@ export default function TrocasClient({
       )}
 
       {/* Modal: Solicitar Troca */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-surface border border-line w-full max-w-lg p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display font-bold text-xl text-ink">Pedir Troca de Escala</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSwap} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
-                  Selecione sua Escala
-                </label>
-                <select
-                  value={selectedAssignmentId}
-                  onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                  className="w-full bg-bg border border-line rounded-control px-3.5 py-2.5 text-sm text-ink font-medium focus:outline-none focus:border-primary"
-                >
-                  {myFutureAssignments.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.programTitle} — {a.departmentName} ({new Date(a.startsAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
-                  Substituto Indicado
-                </label>
-                <select
-                  value={selectedTargetUserId}
-                  onChange={(e) => setSelectedTargetUserId(e.target.value)}
-                  className="w-full bg-bg border border-line rounded-control px-3.5 py-2.5 text-sm text-ink font-medium focus:outline-none focus:border-primary"
-                >
-                  <option value="">Abrir para qualquer voluntário da equipe</option>
-                  {eligibleTargets.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-ink-muted mt-1">
-                  Apenas voluntários com a mesma função no departamento são listados.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
-                  Motivo da Troca (Opcional)
-                </label>
-                <textarea
-                  value={swapReason}
-                  onChange={(e) => setSwapReason(e.target.value)}
-                  maxLength={300}
-                  rows={3}
-                  placeholder="Ex.: Viagem de trabalho no fim de semana..."
-                  className="w-full bg-bg border border-line rounded-control p-3 text-sm text-ink focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-line text-ink-muted font-semibold text-sm rounded-control hover:text-ink min-h-touch"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 bg-primary text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50"
-                >
-                  {submitting ? 'Enviando...' : 'Enviar Solicitação'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Pedir Troca de Escala"
+      >
+        <form onSubmit={handleCreateSwap} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
+              Selecione sua Escala
+            </label>
+            <select
+              value={selectedAssignmentId}
+              onChange={(e) => setSelectedAssignmentId(e.target.value)}
+              className="w-full bg-bg border border-line rounded-control px-3.5 py-2.5 text-sm text-ink font-medium focus:outline-none focus:border-primary"
+            >
+              {myFutureAssignments.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.programTitle} — {a.departmentName} ({new Date(a.startsAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })})
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
+              Substituto Indicado
+            </label>
+            <select
+              value={selectedTargetUserId}
+              onChange={(e) => setSelectedTargetUserId(e.target.value)}
+              className="w-full bg-bg border border-line rounded-control px-3.5 py-2.5 text-sm text-ink font-medium focus:outline-none focus:border-primary"
+            >
+              <option value="">Abrir para qualquer voluntário da equipe</option>
+              {eligibleTargets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-ink-muted mt-1">
+              Apenas voluntários com a mesma função no departamento são listados.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-ink-muted uppercase tracking-wider mb-1.5">
+              Motivo da Troca (Opcional)
+            </label>
+            <textarea
+              value={swapReason}
+              onChange={(e) => setSwapReason(e.target.value)}
+              maxLength={300}
+              rows={3}
+              placeholder="Ex.: Viagem de trabalho no fim de semana..."
+              className="w-full bg-bg border border-line rounded-control p-3 text-sm text-ink focus:outline-none focus:border-primary"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="px-4 py-2 border border-line text-ink-muted font-semibold text-sm rounded-control hover:text-ink min-h-touch"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 bg-primary text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50"
+            >
+              {submitting ? 'Enviando...' : 'Enviar Solicitação'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(cancelSwapId)}
+        onClose={() => setCancelSwapId(null)}
+        onConfirm={() => {
+          if (cancelSwapId) void handleCancel(cancelSwapId);
+        }}
+        title="Cancelar Pedido de Troca"
+        description="Deseja realmente cancelar esta solicitação de troca?"
+        confirmLabel="Cancelar Pedido"
+        variant="danger"
+        loading={submitting}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(rejectSwapId)}
+        onClose={() => setRejectSwapId(null)}
+        onConfirm={(notes) => {
+          if (rejectSwapId) {
+            const id = rejectSwapId;
+            setRejectSwapId(null);
+            void handleReview(id, 'REJECT', notes);
+          }
+        }}
+        title="Rejeitar Troca de Escala"
+        description="Informe opcionalmente o motivo da rejeição para o voluntário."
+        confirmLabel="Rejeitar Troca"
+        variant="danger"
+        loading={submitting}
+        withInput
+        inputLabel="Motivo da rejeição (opcional)"
+        inputPlaceholder="Ex.: Conflito de escala na equipe..."
+      />
     </div>
   );
 }

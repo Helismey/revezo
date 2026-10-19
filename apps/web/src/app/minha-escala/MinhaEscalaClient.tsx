@@ -265,7 +265,12 @@ export function MinhaEscalaClient({
         };
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Desmarcar da Escala"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-150"
+          >
             <div className="bg-surface w-full max-w-md rounded-surface border border-line shadow-2xl p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-line pb-3">
                 <h3 className="font-display font-bold text-lg text-ink">

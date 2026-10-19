@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { removeAssignmentSchema } from '@revezo/contracts';
-import { prisma } from '@revezo/db';
+import { prisma, removeAssignmentWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can, buildAssignmentScopeWhere } from '@revezo/domain';
+import { buildAssignmentScopeWhere } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {
@@ -49,20 +49,13 @@ export async function POST(request: Request) {
     }
 
     const churchId = assignment.slot.program?.churchId || undefined;
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
 
-    await prisma.assignment.delete({
-      where: { id: assignment.id },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorId: session.userId,
-        churchId,
-        action: 'ASSIGNMENT_DELETED',
-        targetType: 'Assignment',
-        targetId: assignment.id,
-        result: 'SUCCESS',
-      },
+    await removeAssignmentWithAudit({
+      assignmentId: assignment.id,
+      actorId: session.userId,
+      churchId,
+      ip,
     });
 
     return NextResponse.json({ success: true });

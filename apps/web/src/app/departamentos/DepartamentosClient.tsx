@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import { ConfirmDialog } from '@/components/Modal';
 
 export interface DepartmentMemberInfo {
   id: string;
@@ -201,8 +202,13 @@ export function DepartamentosClient({
   };
 
   // Remover Membro do Departamento
-  const handleRemoveMember = async (departmentId: string, userId: string, userName: string) => {
-    if (!confirm(`Deseja realmente desvincular ${userName} deste departamento?`)) return;
+  const [pendingRemoveMember, setPendingRemoveMember] = useState<{
+    departmentId: string;
+    userId: string;
+    userName: string;
+  } | null>(null);
+
+  const handleRemoveMember = async (departmentId: string, userId: string) => {
     setMessage(null);
     setLoading(true);
 
@@ -220,6 +226,7 @@ export function DepartamentosClient({
       }
 
       setMessage({ type: 'sucesso', text: 'Voluntário desvinculado com sucesso.' });
+      setPendingRemoveMember(null);
       window.location.reload();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão ao desvincular membro.' });
@@ -411,7 +418,11 @@ export function DepartamentosClient({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleRemoveMember(dept.id, member.userId, member.userName)
+                                  setPendingRemoveMember({
+                                    departmentId: dept.id,
+                                    userId: member.userId,
+                                    userName: member.userName,
+                                  })
                                 }
                                 className="text-xs text-ink-muted hover:text-danger font-semibold"
                                 title="Desvincular do departamento"
@@ -575,7 +586,12 @@ export function DepartamentosClient({
 
       {/* Modal Editar Membro da Equipe */}
       {editingMember && activeDeptForEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Editar ${editingMember.userName}`}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-md w-full p-6 shadow-2xl space-y-4">
             <h2 className="font-display font-bold text-lg text-ink">
               Editar: {editingMember.userName}
@@ -662,6 +678,24 @@ export function DepartamentosClient({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingRemoveMember)}
+        onClose={() => setPendingRemoveMember(null)}
+        onConfirm={() => {
+          if (pendingRemoveMember) {
+            handleRemoveMember(pendingRemoveMember.departmentId, pendingRemoveMember.userId);
+          }
+        }}
+        title="Desvincular voluntário"
+        description={
+          pendingRemoveMember
+            ? `Deseja realmente desvincular ${pendingRemoveMember.userName} deste departamento?`
+            : ''
+        }
+        confirmLabel="Sim, desvincular"
+        loading={loading}
+      />
     </div>
   );
 }

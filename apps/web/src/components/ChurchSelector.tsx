@@ -20,6 +20,7 @@ interface ChurchSelectorProps {
 export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: ChurchSelectorProps) {
   const router = useRouter();
   const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   if (!canSwitch || availableChurches.length <= 1) {
     return (
@@ -36,6 +37,7 @@ export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: 
     if (!targetId || targetId === currentChurch?.id) return;
 
     setSwitching(true);
+    setSwitchError(null);
     try {
       const res = await fetch('/api/igrejas/alternar', {
         method: 'POST',
@@ -47,10 +49,10 @@ export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: 
         router.refresh();
         window.location.reload();
       } else {
-        alert('Não foi possível alternar de congregação');
+        setSwitchError('Não foi possível alternar de congregação.');
       }
     } catch {
-      alert('Erro de conexão ao alternar congregação');
+      setSwitchError('Erro de conexão ao alternar congregação.');
     } finally {
       setSwitching(false);
     }
@@ -79,6 +81,11 @@ export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: 
         </div>
       </div>
       {switching && <span className="text-xs text-ink-muted animate-pulse">Carregando...</span>}
+      {switchError && (
+        <span role="alert" className="text-xs text-danger font-medium">
+          {switchError}
+        </span>
+      )}
     </div>
   );
 }

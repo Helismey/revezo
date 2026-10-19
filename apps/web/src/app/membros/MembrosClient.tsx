@@ -830,7 +830,12 @@ export function MembrosClient({
 
       {/* Modal: Novo Voluntário */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Novo Voluntário"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-lg w-full p-6 space-y-5 shadow-xl my-8">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold font-display text-ink">Novo Voluntário</h2>
@@ -1058,7 +1063,12 @@ export function MembrosClient({
 
       {/* Modal: Importar Planilha */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Importar Voluntários por Planilha"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-2xl w-full p-6 space-y-5 shadow-xl my-8">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold font-display text-ink">Importar Voluntários por Planilha</h2>
@@ -1307,7 +1317,12 @@ export function MembrosClient({
 
       {/* Modal: Editar Voluntário (Com Abas de Dados Pessoais e Cargos/Departamentos) */}
       {editingMember && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Editar voluntário ${editingMember.name}`}
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-2xl w-full p-6 space-y-5 shadow-xl my-8">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-line">

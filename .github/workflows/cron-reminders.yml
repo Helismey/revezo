@@ -6,8 +6,8 @@ name: Cron Lembretes de Escala
 
 on:
   schedule:
-    # 11:00 UTC = 08:00 America/Sao_Paulo (sem horário de verão)
-    - cron: '0 11 * * *'
+    # 11:30 UTC = 08:30 America/Sao_Paulo (fallback defasado em 30 min após o Vercel Cron das 11:00 UTC para evitar corrida simultânea)
+    - cron: '30 11 * * *'
   workflow_dispatch:
 
 concurrency:

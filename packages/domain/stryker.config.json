@@ -4,14 +4,18 @@
   "reporters": ["html", "clear-text", "progress"],
   "testRunner": "command",
   "commandRunner": {
-    "command": "vitest run test/scheduling.test.ts test/auto-substitution.test.ts"
+    "command": "vitest run test/scheduling.test.ts test/auto-substitution.test.ts test/auto-scheduler.test.ts test/authz.test.ts test/authz-matrix.test.ts"
   },
   "concurrency": 4,
   "coverageAnalysis": "off",
   "mutate": [
     "src/scheduling/conflict.ts",
     "src/scheduling/daily-limit.ts",
-    "src/scheduling/auto-substitution.ts"
+    "src/scheduling/auto-substitution.ts",
+    "src/scheduling/eligibility.ts",
+    "src/scheduling/auto-scheduler.ts",
+    "src/scheduling/ranking.ts",
+    "src/authz/can.ts"
   ],
   "thresholds": {
     "high": 80,

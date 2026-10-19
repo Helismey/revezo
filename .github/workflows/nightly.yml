@@ -32,10 +32,26 @@ jobs:
         run: pnpm test:matrix
       - name: Testes de Concorrência
         run: pnpm test:concurrency
+      - name: Testes de Mutação (Stryker)
+        run: pnpm test:mutation
 
   e2e-smoke:
     name: E2E e Acessibilidade (Playwright + Axe)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
       AUTH_SECRET: "ci-secret-placeholder-exactly-32-c"
@@ -51,6 +67,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Gerar cliente Prisma
         run: pnpm db:generate
+      - name: Aplicar migrations do banco
+        run: pnpm --filter @revezo/db exec prisma migrate deploy
+      - name: Popular banco com dados de teste
+        run: pnpm db:seed
       - name: Build pacotes internos
         run: pnpm -r --filter=!@revezo/web build
       - name: Instalar navegadores Playwright

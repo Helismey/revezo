@@ -1,4 +1,5 @@
 import { prisma } from './client.js';
+import { Prisma } from '@prisma/client';
 
 /**
  * Mascara números de telefone para logs/auditoria: +55 62 9****-1234
@@ -42,7 +43,7 @@ const FORBIDDEN_META_KEYS = new Set([
  * Higieniza o objeto de metadados para garantir conformidade estrita com LGPD e Regra 19.
  * NUNCA armazena senhas, tokens completos ou PII em texto claro.
  */
-export function sanitizeAuditMeta(meta: any): any {
+export function sanitizeAuditMeta(meta: unknown): unknown {
   if (!meta || typeof meta !== 'object') {
     return meta;
   }
@@ -51,7 +52,7 @@ export function sanitizeAuditMeta(meta: any): any {
     return meta.map((item) => sanitizeAuditMeta(item));
   }
 
-  const clean: Record<string, any> = {};
+  const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(meta)) {
     const lowerKey = key.toLowerCase();
     if (FORBIDDEN_META_KEYS.has(lowerKey)) {
@@ -89,7 +90,13 @@ export interface RecordAuditParams {
   targetId?: string | null;
   result: 'SUCCESS' | 'DENIED' | 'FAILED';
   ip?: string | null;
-  meta?: Record<string, any> | null;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface AuditPrismaClientLike {
+  auditLog: {
+    create: (args: { data: Prisma.AuditLogUncheckedCreateInput }) => Promise<unknown>;
+  };
 }
 
 /**
@@ -97,10 +104,12 @@ export interface RecordAuditParams {
  * com higienização prévia de metadados e garantia de campos obrigatórios.
  */
 export async function recordAudit(
-  client: any,
+  client: AuditPrismaClientLike,
   params: RecordAuditParams
 ) {
-  const sanitizedMeta = params.meta ? sanitizeAuditMeta(params.meta) : undefined;
+  const sanitizedMeta = params.meta
+    ? (sanitizeAuditMeta(params.meta) as Prisma.InputJsonValue)
+    : undefined;
   return await client.auditLog.create({
     data: {
       churchId: params.churchId || undefined,
@@ -138,7 +147,7 @@ export async function queryAuditLogs(params: QueryAuditLogsParams) {
   const limit = Math.min(200, Math.max(1, params.limit || 50));
   const skip = (page - 1) * limit;
 
-  const where: any = {};
+  const where: Prisma.AuditLogWhereInput = {};
 
   if (params.churchId) {
     where.churchId = params.churchId;
@@ -161,9 +170,10 @@ export async function queryAuditLogs(params: QueryAuditLogsParams) {
   }
 
   if (params.from || params.to) {
-    where.createdAt = {};
-    if (params.from) where.createdAt.gte = new Date(params.from);
-    if (params.to) where.createdAt.lte = new Date(params.to);
+    const createdAtFilter: Prisma.DateTimeFilter = {};
+    if (params.from) createdAtFilter.gte = new Date(params.from);
+    if (params.to) createdAtFilter.lte = new Date(params.to);
+    where.createdAt = createdAtFilter;
   }
 
   if (params.actorId) {
@@ -296,6 +306,15 @@ export interface ScheduleHistoryEvent {
   };
 }
 
+interface ScheduleAuditMeta {
+  userId?: string;
+  newUserId?: string;
+  candidateId?: string;
+  originAssignmentId?: string;
+  reason?: string;
+  notes?: string;
+}
+
 /**
  * Consulta e monta o Histórico Completo de Escalas (timeline):
  * "quem foi escalado, confirmou, recusou, foi substituído e por quem"
@@ -349,7 +368,8 @@ export async function getScheduleHistory(params: QueryScheduleHistoryParams) {
     ];
   }
 
-  // 1. Busca logs de auditoria correspondentes
+  // 1. Busca logs de auditoria correspondentes (dimensionando janela para suportar paginação profunda)
+  const fetchLimit = Math.min(2000, Math.max(300, skip + limit * 2));
   const auditLogs = await prisma.auditLog.findMany({
     where: {
       action: { in: actionFilter },
@@ -361,7 +381,7 @@ export async function getScheduleHistory(params: QueryScheduleHistoryParams) {
       ...(params.userId ? { OR: [{ actorId: params.userId }, { targetId: params.userId }] } : {}),
     },
     orderBy: { createdAt: 'desc' },
-    take: 300, // Amostra de histórico
+    take: fetchLimit,
   });
 
   // 2. Extrai IDs relevantes para resolução
@@ -377,7 +397,7 @@ export async function getScheduleHistory(params: QueryScheduleHistoryParams) {
       swapRequestIds.add(log.targetId);
     }
 
-    const meta = (log.meta as Record<string, any>) || {};
+    const meta = (log.meta as ScheduleAuditMeta | null) || {};
     if (meta.userId) userIds.add(meta.userId);
     if (meta.newUserId) userIds.add(meta.newUserId);
     if (meta.candidateId) userIds.add(meta.candidateId);
@@ -431,13 +451,10 @@ export async function getScheduleHistory(params: QueryScheduleHistoryParams) {
   const events: ScheduleHistoryEvent[] = [];
 
   for (const log of auditLogs) {
-    const meta = (log.meta as Record<string, any>) || {};
+    const meta = (log.meta as ScheduleAuditMeta | null) || {};
     let assignment = log.targetType === 'Assignment' && log.targetId ? assignmentMap.get(log.targetId) : null;
     const swap = log.targetType === 'SwapRequest' && log.targetId ? swapMap.get(log.targetId) : null;
 
-    if (!assignment && swap?.assignment) {
-      assignment = swap.assignment as any;
-    }
     if (!assignment && meta.originAssignmentId) {
       assignment = assignmentMap.get(meta.originAssignmentId) || null;
     }
@@ -462,10 +479,8 @@ export async function getScheduleHistory(params: QueryScheduleHistoryParams) {
     const actorName = actorUser ? actorUser.name : isSystemActor ? 'Sistema (Automático)' : 'Usuário';
 
     // Determina o voluntário principal do evento
-    let volunteerUser = assignment?.user || swap?.requester;
-    if (!volunteerUser && meta.userId) {
-      volunteerUser = userMap.get(meta.userId) as any;
-    }
+    const volunteerUser: { id: string; name: string; email: string } | undefined =
+      assignment?.user || swap?.requester || (meta.userId ? userMap.get(meta.userId) : undefined);
 
     // Substituto (se for troca ou substituição automática)
     let substituteUser: { id: string; name: string; email: string } | null = null;

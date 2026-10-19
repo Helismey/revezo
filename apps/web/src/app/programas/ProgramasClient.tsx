@@ -556,7 +556,12 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
 
       {/* Modal de Criação (Único ou Recorrente em Massa) */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Novo Compromisso ou Programa"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
               <h2 className="font-display font-bold text-xl text-ink">Novo Compromisso / Programa</h2>
@@ -798,7 +803,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
                     </label>
                     <select
                       value={recurrenceMode}
-                      onChange={(e) => setRecurrenceMode(e.target.value as any)}
+                      onChange={(e) => setRecurrenceMode(e.target.value as 'WEEKLY_DAYS' | 'DAILY_RANGE')}
                       className="w-full px-3 py-2 bg-surface border border-line rounded-control text-sm text-ink font-medium"
                     >
                       <option value="WEEKLY_DAYS">Dias Específicos da Semana (ex: Sábados)</option>
