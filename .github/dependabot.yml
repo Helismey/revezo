@@ -43,3 +43,7 @@ updates:
           - "tsx"
           - "vitest"
           - "@vitest/*"
+    ignore:
+      # Sem versão corrigida acima de 3.0.3 no npm (GHSA-vfj7-8cjw-p6xm, dependência transitiva de build via tailwindcss)
+      - dependency-name: "braces"
+        versions: ["<=3.0.3"]

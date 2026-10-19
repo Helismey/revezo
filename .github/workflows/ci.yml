@@ -37,10 +37,28 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
 
-  # ─── Job 2: Testes unitários ─────────────────────────────────────────────────
+  # ─── Job 2: Testes unitários e de integração ─────────────────────────────────
   test:
-    name: Unit Tests
+    name: Unit & Integration Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      DIRECT_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      AUTH_SECRET: "ci-secret-placeholder-exactly-32-c" # gitleaks:allow
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -51,6 +69,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Gerar cliente Prisma
         run: pnpm db:generate
+      - name: Aplicar migrations no banco de teste
+        run: pnpm --filter @revezo/db exec prisma migrate deploy
       - name: Build dos pacotes internos
         run: pnpm -r --filter=!@revezo/web build
       - run: pnpm test
@@ -63,8 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [quality]
     env:
-      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
-      AUTH_SECRET: "ci-secret-placeholder-exactly-32-c"
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      DIRECT_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      AUTH_SECRET: "ci-secret-placeholder-exactly-32-c" # gitleaks:allow
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:

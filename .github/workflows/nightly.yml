@@ -53,8 +53,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
-      AUTH_SECRET: "ci-secret-placeholder-exactly-32-c"
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      DIRECT_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?schema=public"
+      AUTH_SECRET: "ci-secret-placeholder-exactly-32-c" # gitleaks:allow
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:

@@ -1,0 +1,17 @@
+title = "Configuração Gitleaks — Revezo"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignorar falsos positivos em arquivos de teste, lista de senhas fracas e placeholders de CI"
+paths = [
+  '''(^|/)test/.*\.test\.ts$''',
+  '''(^|/)e2e/.*\.spec\.ts$''',
+  '''packages/domain/src/auth/password\.ts$''',
+  '''\.github/workflows/(ci|nightly)\.yml$''',
+]
+regexes = [
+  '''ci-secret-placeholder-exactly-32-c''',
+  '''teste-nao-usar-em-producao-0+''',
+]

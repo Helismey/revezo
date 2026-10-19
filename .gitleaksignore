@@ -1,0 +1,9 @@
+# Falsos positivos históricos em testes unitários, lista de senhas fracas e placeholders de CI
+021044b882a85abefcff0c5d6f3aa1d0fdd6eecd:.github/workflows/nightly.yml:generic-api-key:57
+2925af60082acaae77d3245e4eacdb067440b736:.github/workflows/ci.yml:generic-api-key:67
+2925af60082acaae77d3245e4eacdb067440b736:.github/workflows/nightly.yml:generic-api-key:41
+1be9b82535df6274858b1f230c240aadca3e2bcc:packages/domain/test/audit-and-history.test.ts:generic-api-key:77
+0dd5302dcb7b7340a71e96e6c5e95f1c70671845:.github/workflows/nightly.yml:generic-api-key:41
+1141d34fa05316638daa07eafc9d766dba761690:.github/workflows/ci.yml:generic-api-key:63
+985c7c2ee3128fd03c395e9fb298071c153fd27e:packages/domain/test/action-token.test.ts:generic-api-key:21
+d9da00d81f1f4fa10e6ddc01506c634869da9784:packages/domain/src/auth/password.ts:generic-api-key:7
