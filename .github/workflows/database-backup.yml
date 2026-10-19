@@ -106,7 +106,7 @@ jobs:
 
       - name: Salvar Artefato Criptografado no GitHub (Retenção 30 dias)
         if: env.BACKUP_FILE != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: db-backup-${{ env.TIMESTAMP }}
           path: ${{ env.BACKUP_FILE }}
