@@ -122,6 +122,52 @@ describe('OWASP Web Security & Headers (/api/upload, middleware, next.config)', 
       expect(res.headers.get('X-Frame-Options')).toBe('DENY');
       expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
     });
+
+    it('evita loop infinito de redirecionamento em /login quando o cookie revezo_sess está expirado ou inválido e limpa o cookie', () => {
+      const expiredPayload = Buffer.from(
+        JSON.stringify({
+          userId: 'usr-1',
+          status: 'ACTIVE',
+          createdAt: Date.now() - 10 * 24 * 60 * 60 * 1000, // 10 dias atrás (expirado)
+        }),
+        'utf8'
+      ).toString('base64url');
+
+      const req = new NextRequest('https://escala.igreja.org/login', {
+        method: 'GET',
+        headers: {
+          cookie: `revezo_sess=${expiredPayload}.fakesig`,
+        },
+      });
+
+      const res = middleware(req);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('set-cookie')).toContain('revezo_sess=;');
+    });
+
+    it('redireciona /login para / quando o cookie revezo_sess possui sessão ACTIVE dentro da validade', () => {
+      const now = Date.now();
+      const freshPayload = Buffer.from(
+        JSON.stringify({
+          userId: 'usr-1',
+          status: 'ACTIVE',
+          createdAt: now,
+          lastActiveAt: now,
+        }),
+        'utf8'
+      ).toString('base64url');
+
+      const req = new NextRequest('https://escala.igreja.org/login', {
+        method: 'GET',
+        headers: {
+          cookie: `revezo_sess=${freshPayload}.sig`,
+        },
+      });
+
+      const res = middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://escala.igreja.org/');
+    });
   });
 
   // =========================================================================

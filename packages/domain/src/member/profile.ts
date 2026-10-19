@@ -1,6 +1,11 @@
 /**
  * Módulo de domínio para gestão e privacidade do perfil do membro (LGPD).
  */
+import {
+  decryptSensitiveJson,
+  decryptEmergencyContact,
+  decryptOptionalString,
+} from '../crypto/aes.js';
 
 export interface ProfileDateValidationResult {
   valid: boolean;
@@ -101,7 +106,17 @@ export interface MemberExportSource {
  * Prepara os dados pessoais do membro para exportação/portabilidade (Art. 18 da LGPD).
  * NUNCA exporta hashes de senha, segredos TOTP/MFA ou tokens de autenticação.
  */
-export function exportMemberData(user: MemberExportSource) {
+export function exportMemberData(user: MemberExportSource, encryptionKey?: string | null) {
+  const decryptedAddress =
+    user.address && typeof user.address === 'object'
+      ? decryptSensitiveJson(user.address, encryptionKey) ?? user.address
+      : (user.address ?? null);
+  const decryptedEmergencyContact =
+    user.emergencyContact && typeof user.emergencyContact === 'object'
+      ? decryptEmergencyContact(user.emergencyContact, encryptionKey) ?? user.emergencyContact
+      : (user.emergencyContact ?? null);
+  const decryptedNotes = decryptOptionalString(user.notes, encryptionKey);
+
   return {
     cabecalho: {
       titulo: 'Exportação de Dados Pessoais — Revezo (LGPD)',
@@ -118,7 +133,7 @@ export function exportMemberData(user: MemberExportSource) {
       sexo: user.gender ?? null,
       estadoCivil: user.maritalStatus ?? null,
       dataEntradaOuBatismo: user.joinedAt ? new Date(user.joinedAt).toISOString().split('T')[0] : null,
-      observacoes: user.notes ?? null,
+      observacoes: decryptedNotes,
       statusConta: user.status,
       dataCadastro: user.createdAt ? new Date(user.createdAt).toISOString() : null,
     },
@@ -128,8 +143,8 @@ export function exportMemberData(user: MemberExportSource) {
       whatsapp: user.whatsapp ?? null,
       canalPreferido: user.preferredChannel ?? 'WHATSAPP',
     },
-    endereco: user.address ?? null,
-    contatoEmergencia: user.emergencyContact ?? null,
+    endereco: decryptedAddress,
+    contatoEmergencia: decryptedEmergencyContact,
     preferenciasPrivacidade: {
       termosAceitosEm: user.termsAcceptedAt ? new Date(user.termsAcceptedAt).toISOString() : null,
       versaoTermos: user.termsVersion ?? null,

@@ -47,6 +47,41 @@ function isAllowedOrigin(origin: string, host: string): boolean {
   }
 }
 
+const SESSION_MAX_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Verifica se o payload do cookie revezo_sess corresponde a uma sessão ativa e não expirada.
+ * Impede loop infinito de redirecionamento entre /login e / quando o cookie está expirado ou inválido.
+ */
+function isCookiePayloadActiveAndFresh(cookieValue: string): boolean {
+  try {
+    const [base64Data, signature] = cookieValue.split('.');
+    if (!base64Data || !signature) return false;
+
+    const base64Standard = base64Data.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(base64Standard);
+    const payload = JSON.parse(json) as {
+      status?: string;
+      createdAt?: number;
+      lastActiveAt?: number;
+    };
+
+    if (payload.status !== 'ACTIVE') return false;
+    if (typeof payload.createdAt !== 'number') return false;
+
+    const now = Date.now();
+    if (now - payload.createdAt > SESSION_MAX_LIFETIME_MS) return false;
+
+    const lastActive = typeof payload.lastActiveAt === 'number' ? payload.lastActiveAt : payload.createdAt;
+    if (now - lastActive > SESSION_IDLE_TIMEOUT_MS) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
@@ -105,12 +140,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 4. Redirecionamento se já logado
+  // 4. Redirecionamento se já logado com sessão ativa e dentro do prazo (evita loop com cookie expirado)
+  let shouldClearStaleSession = false;
   if (sessionCookie && (pathname === '/login' || pathname === '/cadastro')) {
-    return NextResponse.redirect(new URL('/', request.url));
+    if (isCookiePayloadActiveAndFresh(sessionCookie.value)) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    shouldClearStaleSession = true;
   }
 
   const response = NextResponse.next();
+
+  if (shouldClearStaleSession) {
+    response.cookies.delete('revezo_sess');
+  }
 
   // 5. Injeta cabeçalhos defensivos essenciais em todas as respostas (Regra 12)
   response.headers.set('X-Content-Type-Options', 'nosniff');

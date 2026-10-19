@@ -48,11 +48,35 @@ export class NotificationDispatcher {
     this.channels.set(channel.name, channel);
   }
 
+  private cachedFlags: Map<string, boolean> | null = null;
+  private cachedFlagsExpiresAt = 0;
+
   /**
    * Pausa assíncrona para controle de taxa de envio (anti-bloqueio).
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async getFeatureFlagsMap(): Promise<Map<string, boolean>> {
+    const now = Date.now();
+    if (
+      process.env.NODE_ENV !== 'test' &&
+      this.cachedFlags &&
+      now < this.cachedFlagsExpiresAt
+    ) {
+      return this.cachedFlags;
+    }
+
+    const flags = await prisma.featureFlag.findMany();
+    const flagMap = new Map(flags.map((f) => [f.key, f.enabled]));
+
+    if (process.env.NODE_ENV !== 'test') {
+      this.cachedFlags = flagMap;
+      this.cachedFlagsExpiresAt = now + 5000;
+    }
+
+    return flagMap;
   }
 
   /**
@@ -76,9 +100,8 @@ export class NotificationDispatcher {
       }
     }
 
-    // Busca feature flags ativas no banco
-    const flags = await prisma.featureFlag.findMany();
-    const flagMap = new Map(flags.map((f) => [f.key, f.enabled]));
+    // Busca feature flags ativas no banco (com cache curto em runtime para evitar N+1 em lotes/cron)
+    const flagMap = await this.getFeatureFlagsMap();
 
     const whatsappEnabled = flagMap.get('whatsapp_enabled') ?? true;
     const smsEnabled = flagMap.get('sms_enabled') ?? false;

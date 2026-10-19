@@ -11,6 +11,9 @@ import {
   verifyTotp,
   encryptField,
   decryptField,
+  encryptSensitiveJson,
+  encryptEmergencyContact,
+  encryptOptionalString,
   generateTotpSecret,
   getTotpUri,
   generateRecoveryCodes,
@@ -802,25 +805,23 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
     };
   }
 
-  // 3. Hash de senha e criptografia de campos sensíveis
+  // 3. Hash de senha e criptografia de campos sensíveis (LGPD)
   const passwordHash = hashPassword(data.password);
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || SESSION_SECRET;
 
-  let addressData: unknown = null;
-  if (data.address) {
-    addressData = {
-      ...data.address,
-      encryptedPayload: encryptField(JSON.stringify(data.address), SESSION_SECRET),
-    };
-  }
+  const addressData = data.address
+    ? encryptSensitiveJson(data.address, encryptionKey)
+    : null;
 
-  let emergencyData: unknown = null;
-  if (data.emergencyContact) {
-    emergencyData = {
-      name: data.emergencyContact.name,
-      relationship: data.emergencyContact.relationship,
-      phoneEnc: encryptField(data.emergencyContact.phone, SESSION_SECRET),
-    };
-  }
+  const emergencyData = data.emergencyContact
+    ? encryptEmergencyContact(data.emergencyContact, encryptionKey)
+    : null;
+
+  const encryptedNotes = encryptOptionalString(data.notes || null, encryptionKey);
+  const encryptedGuardianPhone = encryptOptionalString(
+    data.isMinor ? data.guardianPhone || null : null,
+    encryptionKey
+  );
 
   // Determina congregação para o membro
   let targetChurchId = data.churchId;
@@ -832,6 +833,7 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
     targetChurchId = defaultChurch?.id;
   }
 
+  const now = new Date();
   const newUser = await prisma.user.create({
     data: {
       name: data.name,
@@ -850,8 +852,12 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
       emergencyContact: emergencyData as any,
       joinedAt: data.joinedAt ? new Date(data.joinedAt) : null,
       preferredChannel: data.preferredChannel,
-      notes: data.notes || null,
-      termsAcceptedAt: new Date(),
+      notes: encryptedNotes,
+      isMinor: Boolean(data.isMinor),
+      guardianName: data.isMinor ? data.guardianName || null : null,
+      guardianPhone: encryptedGuardianPhone,
+      guardianConsentAt: data.isMinor ? now : null,
+      termsAcceptedAt: now,
       termsVersion: 'v1.0',
     },
   });

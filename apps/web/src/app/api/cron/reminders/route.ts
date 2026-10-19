@@ -9,6 +9,8 @@ import {
 } from '@revezo/domain';
 import { notificationDispatcher } from '@/services/notifications/dispatcher';
 
+export const maxDuration = 60;
+
 async function handleReminders(request: Request) {
   try {
     // 1. Validação de segurança via CRON_SECRET com proteção contra timing attack e fail-closed
@@ -106,13 +108,28 @@ async function handleReminders(request: Request) {
     let failureCount = 0;
     const results: { assignmentId: string; kind: string; success: boolean; channel?: string; error?: string }[] = [];
 
-    // 4. Executa os disparos pendentes
+    // 4. Busca configurações da igreja uma única vez para o lote (evita N+1 no loop de tokens)
+    let churchName = 'Nossa Igreja';
+    if (pendingReminders.length > 0) {
+      try {
+        const settings = await prisma.churchSettings?.findFirst?.();
+        if (settings?.name) {
+          churchName = settings.name;
+        }
+      } catch {
+        // Fallback seguro para testes que não mockam churchSettings
+      }
+    }
+
+    // 5. Executa os disparos pendentes
     for (const item of pendingReminders) {
       try {
         // Gera token de confirmação seguro
         const tokenRes = await createConfirmationTokenWithAudit({
           assignmentId: item.assignment.id,
           maxDays: 7,
+          baseUrl,
+          churchName,
           actorId: 'SYSTEM_CRON',
         });
 

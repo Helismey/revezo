@@ -5,6 +5,12 @@ import {
   can,
   UserContext,
   sanitizeCsvCell,
+  encryptSensitiveJson,
+  decryptSensitiveJson,
+  encryptEmergencyContact,
+  decryptEmergencyContact,
+  encryptOptionalString,
+  decryptOptionalString,
 } from '../src/index.js';
 
 describe('Perfil do Membro e LGPD (Domain)', () => {
@@ -293,6 +299,104 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
         departmentId: 'dept-123',
       });
       expect(invalid.success).toBe(false);
+    });
+
+    it('exige guardianName e guardianPhone em formato E.164 no registerSchema quando isMinor é true (LGPD Art. 14)', async () => {
+      const { registerSchema } = await import('@revezo/contracts');
+      const missingGuardian = registerSchema.safeParse({
+        name: 'Jovem Voluntário',
+        email: 'jovem@igreja.com',
+        password: 'SenhaForte123!',
+        phonePrimary: '+5562999990000',
+        isMinor: true,
+        termsAccepted: true,
+      });
+      expect(missingGuardian.success).toBe(false);
+
+      const withValidGuardian = registerSchema.safeParse({
+        name: 'Jovem Voluntário',
+        email: 'jovem@igreja.com',
+        password: 'SenhaForte123!',
+        phonePrimary: '+5562999990000',
+        isMinor: true,
+        guardianName: 'Maria Responsável',
+        guardianPhone: '+5562988887777',
+        termsAccepted: true,
+      });
+      expect(withValidGuardian.success).toBe(true);
+    });
+  });
+
+  describe('Criptografia de Campos Sensíveis em Repouso (LGPD Art. 46)', () => {
+    const testKey = 'chave-teste-criptografia-lgpd-32bytes!';
+
+    it('criptografa e descriptografa endereço JSON sem vazar texto puro', () => {
+      const rawAddress = {
+        street: 'Av. Goiás',
+        number: '500',
+        neighborhood: 'Setor Central',
+        city: 'Goiânia',
+        state: 'GO',
+        postalCode: '74000-000',
+      };
+
+      const encrypted = encryptSensitiveJson(rawAddress, testKey);
+      expect(encrypted).toHaveProperty('encryptedPayload');
+      expect(JSON.stringify(encrypted)).not.toContain('Av. Goiás');
+
+      const decrypted = decryptSensitiveJson<typeof rawAddress>(encrypted, testKey);
+      expect(decrypted).toEqual(rawAddress);
+    });
+
+    it('criptografa e descriptografa contato de emergência e observações, e exportMemberData descriptografa com chave', () => {
+      const rawEmergency = {
+        name: 'Ana Souza',
+        relationship: 'Mãe',
+        phone: '+5562999991111',
+      };
+      const encEmergency = encryptEmergencyContact(rawEmergency, testKey);
+      expect(JSON.stringify(encEmergency)).not.toContain('+5562999991111');
+      expect(decryptEmergencyContact(encEmergency, testKey)).toEqual(rawEmergency);
+
+      const encNotes = encryptOptionalString('Restrição alimentar leve', testKey);
+      expect(encNotes).not.toContain('Restrição');
+      expect(decryptOptionalString(encNotes, testKey)).toBe('Restrição alimentar leve');
+
+      const exported = exportMemberData(
+        {
+          id: 'u-enc',
+          name: 'Pedro Criptografado',
+          email: 'pedro@exemplo.com',
+          birthDate: null,
+          gender: null,
+          maritalStatus: null,
+          photoUrl: null,
+          phonePrimary: '+5562900001111',
+          phoneSecondary: null,
+          whatsapp: null,
+          address: encryptSensitiveJson({ street: 'Rua Secreta' }, testKey),
+          emergencyContact: encEmergency,
+          joinedAt: null,
+          preferredChannel: 'EMAIL',
+          notes: encNotes,
+          status: 'ACTIVE',
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          optOutWhatsapp: false,
+          optOutEmail: false,
+          optOutPush: false,
+          optOutSms: false,
+          termsAcceptedAt: new Date('2026-01-01T00:00:00Z'),
+          termsVersion: 'v1.0',
+          memberships: [],
+          assignments: [],
+          availabilities: [],
+        },
+        testKey
+      );
+
+      expect(exported.endereco).toEqual({ street: 'Rua Secreta' });
+      expect(exported.contatoEmergencia).toEqual(rawEmergency);
+      expect(exported.dadosPessoais.observacoes).toBe('Restrição alimentar leve');
     });
   });
 });

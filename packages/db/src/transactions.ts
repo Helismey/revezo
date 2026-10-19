@@ -36,7 +36,253 @@ import {
   generateRefreshTokenPair,
   hashRefreshToken,
   evaluateRefreshToken,
+  encryptSensitiveJson,
+  encryptEmergencyContact,
+  encryptOptionalString,
 } from '@revezo/domain';
+
+/**
+ * Adquire lock transacional por usuário no PostgreSQL para serializar atribuições concorrentes.
+ * Ignora silenciosamente em ambientes de teste unitário com mocks parciais que não expõem $executeRaw.
+ */
+async function acquireUserLock(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === 'function') {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+  }
+}
+
+/**
+ * Normaliza o status do banco para verificação de conflito e limite diário no domínio
+ * (tratando PENDING_APPROVAL como escala ativa).
+ */
+function mapStatusForConflictCheck(
+  status: string
+): 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED' {
+  if (status === 'PENDING_APPROVAL') return 'PENDING';
+  return status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED';
+}
+
+/**
+ * Helper interno unificado para busca e atribuição de substituto elegível dentro de uma transação.
+ */
+async function findAndAssignSubstituteInternal(
+  tx: Prisma.TransactionClient,
+  params: {
+    slot: {
+      id: string;
+      departmentId: string;
+      functionId: string | null;
+      startsAt: Date;
+      endsAt: Date;
+      department: { churchId: string | null; name: string };
+      program: { title: string };
+    };
+    originalAssignmentId: string;
+    originalUserId: string;
+    declinedReason?: string | null;
+    actorId?: string;
+    ip?: string;
+    auditAction?: string;
+    auditReasonMeta?: string;
+  }
+) {
+  const {
+    slot,
+    originalAssignmentId,
+    originalUserId,
+    declinedReason,
+    actorId,
+    ip,
+    auditAction = 'AUTO_SUBSTITUTION_ASSIGNED',
+    auditReasonMeta,
+  } = params;
+
+  const now = new Date();
+
+  const previousDeclined = await tx.assignment.findMany({
+    where: {
+      slotId: slot.id,
+      status: { in: ['DECLINED', 'SUBSTITUTED'] },
+    },
+    select: { userId: true },
+  });
+  const declinedUserIds = Array.from(
+    new Set([originalUserId, ...previousDeclined.map((p) => p.userId)])
+  );
+
+  const members = await tx.user.findMany({
+    where: {
+      status: 'ACTIVE',
+      ...(slot.department.churchId ? { churchId: slot.department.churchId } : {}),
+      memberships: {
+        some: {
+          departmentId: slot.departmentId,
+          ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
+        },
+      },
+    },
+    include: {
+      memberships: {
+        include: {
+          functions: true,
+        },
+      },
+      availabilities: true,
+      assignments: {
+        where: {
+          status: { in: ['PENDING', 'CONFIRMED', 'PENDING_APPROVAL'] },
+        },
+        include: {
+          slot: {
+            include: {
+              program: true,
+              department: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const candidates: CandidateUser[] = members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    status: m.status,
+    departmentMemberships: m.memberships.map((mem) => ({
+      departmentId: mem.departmentId,
+      functions: mem.functions.map((f) => ({ functionId: f.functionId })),
+    })),
+    availabilities: m.availabilities.map((av) => ({
+      kind: av.kind,
+      weekday: av.weekday,
+      from: av.from,
+      to: av.to,
+    })),
+    assignments: m.assignments.map((a) => ({
+      id: a.id,
+      startsAt: a.slot.startsAt,
+      endsAt: a.slot.endsAt,
+      status: mapStatusForConflictCheck(a.status),
+      departmentName: a.slot.department.name,
+      programTitle: a.slot.program.title,
+    })),
+  }));
+
+  const memberIds = members.map((m) => m.id);
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const recentAssignments =
+    memberIds.length > 0
+      ? await tx.assignment.findMany({
+          where: {
+            userId: { in: memberIds },
+            status: { in: ['CONFIRMED', 'PENDING', 'PENDING_APPROVAL'] },
+            slot: {
+              startsAt: { gte: sixtyDaysAgo, lte: now },
+            },
+          },
+          select: {
+            userId: true,
+            createdAt: true,
+            slot: {
+              select: { startsAt: true },
+            },
+          },
+        })
+      : [];
+
+  const statsMap = new Map<string, { assignmentsLast60Days: number; lastAssignmentDate?: Date | null }>();
+  for (const m of members) {
+    const userAssignments = recentAssignments.filter((a) => a.userId === m.id);
+    const count = userAssignments.length;
+    let lastDate: Date | null = null;
+    if (userAssignments.length > 0) {
+      const sorted = [...userAssignments].sort((a, b) => {
+        const aTime = a.slot?.startsAt ? a.slot.startsAt.getTime() : a.createdAt.getTime();
+        const bTime = b.slot?.startsAt ? b.slot.startsAt.getTime() : b.createdAt.getTime();
+        return bTime - aTime;
+      });
+      lastDate = sorted[0]?.slot?.startsAt ?? sorted[0]?.createdAt ?? null;
+    }
+    statsMap.set(m.id, { assignmentsLast60Days: count, lastAssignmentDate: lastDate });
+  }
+
+  const slotReq: SlotRequirement = {
+    id: slot.id,
+    departmentId: slot.departmentId,
+    functionId: slot.functionId,
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+  };
+
+  const subResult = findBestSubstituteCandidate({
+    candidates,
+    slot: slotReq,
+    declinedUserIds,
+    statsMap,
+  });
+
+  if (!subResult.candidate) {
+    return {
+      newAssignment: null,
+      diagnosis: subResult.diagnosis,
+    };
+  }
+
+  await acquireUserLock(tx, subResult.candidate.id);
+
+  // Atualiza a escala original para SUBSTITUTED
+  await tx.assignment.update({
+    where: { id: originalAssignmentId },
+    data: {
+      status: 'SUBSTITUTED',
+      ...(declinedReason !== undefined ? { declinedReason } : {}),
+    },
+  });
+
+  const newAssignment = await tx.assignment.create({
+    data: {
+      slotId: slot.id,
+      userId: subResult.candidate.id,
+      status: 'PENDING',
+      replacedById: originalAssignmentId,
+    },
+    include: {
+      user: true,
+      slot: {
+        include: {
+          program: true,
+          department: true,
+          function: true,
+        },
+      },
+    },
+  });
+
+  await tx.auditLog.create({
+    data: {
+      actorId: actorId || 'SYSTEM_AUTO_SUB',
+      churchId: slot.department.churchId || undefined,
+      action: auditAction,
+      targetType: 'Assignment',
+      targetId: newAssignment.id,
+      result: 'SUCCESS',
+      ip,
+      meta: {
+        ...(auditReasonMeta ? { reason: auditReasonMeta } : {}),
+        originalAssignmentId,
+        originalUserId,
+        substituteUserId: newAssignment.userId,
+        slotId: slot.id,
+        programTitle: slot.program.title,
+      },
+    },
+  });
+
+  return {
+    newAssignment,
+    diagnosis: undefined,
+  };
+}
 
 export interface AssignMemberParams {
   slotId: string;
@@ -49,6 +295,8 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
   const { slotId, userId, actorId, ip } = params;
 
   return await prisma.$transaction(async (tx) => {
+    await acquireUserLock(tx, userId);
+
     // 1. Busca os detalhes do slot
     const slot = await tx.programSlot.findUnique({
       where: { id: slotId },
@@ -142,7 +390,7 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
       departmentId: a.slot.departmentId,
       startsAt: a.slot.startsAt,
       endsAt: a.slot.endsAt,
-      status: a.status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED',
+      status: mapStatusForConflictCheck(a.status),
     }));
 
     // 6. Verificação de conflito de horário
@@ -367,6 +615,8 @@ export async function updateUserProfileWithAudit(params: UpdateUserProfileParams
     throw new Error(dateCheck.error || 'Datas de perfil inconsistentes.');
   }
 
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || null;
+
   return await prisma.$transaction(async (tx) => {
     const existingUser = await tx.user.findUnique({
       where: { id: userId },
@@ -379,6 +629,23 @@ export async function updateUserProfileWithAudit(params: UpdateUserProfileParams
     if (existingUser.status !== 'ACTIVE') {
       throw new Error('Apenas usuários ativos podem atualizar seu perfil.');
     }
+
+    const encryptedAddress =
+      data.address !== undefined
+        ? data.address
+          ? (encryptSensitiveJson(data.address, encryptionKey) as Prisma.InputJsonValue)
+          : Prisma.JsonNull
+        : undefined;
+
+    const encryptedEmergencyContact =
+      data.emergencyContact !== undefined
+        ? data.emergencyContact
+          ? (encryptEmergencyContact(data.emergencyContact, encryptionKey) as Prisma.InputJsonValue)
+          : Prisma.JsonNull
+        : undefined;
+
+    const encryptedNotes =
+      data.notes !== undefined ? encryptOptionalString(data.notes, encryptionKey) : undefined;
 
     const updated = await tx.user.update({
       where: { id: userId },
@@ -393,13 +660,15 @@ export async function updateUserProfileWithAudit(params: UpdateUserProfileParams
         ...(data.phonePrimary !== undefined && { phonePrimary: data.phonePrimary }),
         ...(data.phoneSecondary !== undefined && { phoneSecondary: data.phoneSecondary || null }),
         ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp || null }),
-        ...(data.address !== undefined && { address: data.address }),
-        ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact }),
+        ...(encryptedAddress !== undefined && { address: encryptedAddress }),
+        ...(encryptedEmergencyContact !== undefined && {
+          emergencyContact: encryptedEmergencyContact,
+        }),
         ...(data.joinedAt !== undefined && {
           joinedAt: data.joinedAt ? new Date(`${data.joinedAt}T00:00:00Z`) : null,
         }),
         ...(data.preferredChannel !== undefined && { preferredChannel: data.preferredChannel }),
-        ...(data.notes !== undefined && { notes: data.notes || null }),
+        ...(encryptedNotes !== undefined && { notes: encryptedNotes }),
         ...(data.optOutWhatsapp !== undefined && { optOutWhatsapp: data.optOutWhatsapp }),
         ...(data.optOutEmail !== undefined && { optOutEmail: data.optOutEmail }),
         ...(data.optOutPush !== undefined && { optOutPush: data.optOutPush }),
@@ -571,6 +840,7 @@ export interface CreateConfirmationTokenParams {
   ip?: string;
   maxDays?: number;
   baseUrl?: string;
+  churchName?: string;
 }
 
 export interface ConfirmationTokenResult {
@@ -590,7 +860,7 @@ export interface ConfirmationTokenResult {
 export async function createConfirmationTokenWithAudit(
   params: CreateConfirmationTokenParams
 ): Promise<ConfirmationTokenResult> {
-  const { assignmentId, actorId, ip, maxDays = 7, baseUrl = '' } = params;
+  const { assignmentId, actorId, ip, maxDays = 7, baseUrl = '', churchName } = params;
 
   // 1. Busca dados da escala, voluntário e slot
   const assignment = await prisma.assignment.findUnique({
@@ -661,11 +931,14 @@ export async function createConfirmationTokenWithAudit(
   });
 
   const confirmationUrl = baseUrl ? `${baseUrl}/confirmar/${rawToken}` : `/confirmar/${rawToken}`;
-  const church = await prisma.churchSettings.findFirst();
+  const resolvedChurchName =
+    churchName !== undefined
+      ? churchName
+      : (await prisma.churchSettings.findFirst())?.name;
 
   const whatsappMessage = formatConfirmationMessage({
     memberFirstName: assignment.user.name.split(' ')[0] || assignment.user.name,
-    churchName: church?.name,
+    churchName: resolvedChurchName,
     programTitle: assignment.slot.program.title,
     departmentName: assignment.slot.department.name,
     functionName: assignment.slot.function?.name || assignment.slot.title,
@@ -847,13 +1120,16 @@ export async function consumeConfirmationTokenWithAudit(params: ConsumeConfirmat
       },
     });
 
+    const resolvedReason =
+      action === 'DECLINE' ? reason || 'Imprevisto informado pelo voluntário via link' : null;
+
     // Atualiza o assignment
     const targetStatus = action === 'CONFIRM' ? 'CONFIRMED' : 'DECLINED';
     const updatedAssignment = await tx.assignment.update({
       where: { id: actionToken.refId },
       data: {
         status: targetStatus,
-        declinedReason: action === 'DECLINE' ? reason || 'Imprevisto informado pelo voluntário via link' : null,
+        declinedReason: resolvedReason,
       },
       include: {
         slot: {
@@ -885,101 +1161,25 @@ export async function consumeConfirmationTokenWithAudit(params: ConsumeConfirmat
 
     // Se o voluntário desmarcou e a flag auto_substitution estiver ativa, tenta substituição imediata
     let substituteAssignmentId: string | null = null;
+    let diagnosis: string | undefined;
     if (action === 'DECLINE') {
       const autoSubFlag = await tx.featureFlag.findUnique({
         where: { key: 'auto_substitution' },
       });
 
       if (autoSubFlag?.enabled) {
-        const slot = updatedAssignment.slot;
-        const previousDeclined = await tx.assignment.findMany({
-          where: { slotId: slot.id, status: 'DECLINED' },
-          select: { userId: true },
+        const subOutcome = await findAndAssignSubstituteInternal(tx, {
+          slot: updatedAssignment.slot,
+          originalAssignmentId: updatedAssignment.id,
+          originalUserId: actionToken.userId,
+          declinedReason: resolvedReason,
+          actorId: 'SYSTEM_AUTO_SUB',
+          ip,
         });
-        const declinedUserIds = [actionToken.userId, ...previousDeclined.map((p) => p.userId)];
-
-        const members = await tx.user.findMany({
-          where: {
-            status: 'ACTIVE',
-            memberships: {
-              some: {
-                departmentId: slot.departmentId,
-                ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
-              },
-            },
-          },
-          include: {
-            memberships: { include: { functions: true } },
-            availabilities: true,
-            assignments: {
-              where: { status: { in: ['PENDING', 'CONFIRMED'] } },
-              include: { slot: { include: { program: true, department: true } } },
-            },
-          },
-        });
-
-        const candidates: CandidateUser[] = members.map((m) => ({
-          id: m.id,
-          name: m.name,
-          status: m.status,
-          departmentMemberships: m.memberships.map((mem) => ({
-            departmentId: mem.departmentId,
-            functions: mem.functions.map((f) => ({ functionId: f.functionId })),
-          })),
-          availabilities: m.availabilities.map((av) => ({
-            kind: av.kind,
-            weekday: av.weekday,
-            from: av.from,
-            to: av.to,
-          })),
-          assignments: m.assignments.map((a) => ({
-            id: a.id,
-            startsAt: a.slot.startsAt,
-            endsAt: a.slot.endsAt,
-            status: a.status,
-            departmentName: a.slot.department.name,
-            programTitle: a.slot.program.title,
-          })),
-        }));
-
-        const subResult = findBestSubstituteCandidate({
-          candidates,
-          slot: {
-            id: slot.id,
-            departmentId: slot.departmentId,
-            functionId: slot.functionId,
-            startsAt: slot.startsAt,
-            endsAt: slot.endsAt,
-          },
-          declinedUserIds,
-        });
-
-        if (subResult.candidate) {
-          const newSub = await tx.assignment.create({
-            data: {
-              slotId: slot.id,
-              userId: subResult.candidate.id,
-              status: 'PENDING',
-              replacedById: updatedAssignment.id,
-            },
-          });
-          substituteAssignmentId = newSub.id;
-
-          await tx.auditLog.create({
-            data: {
-              actorId: 'SYSTEM_AUTO_SUB',
-              action: 'AUTO_SUBSTITUTION_ASSIGNED',
-              targetType: 'Assignment',
-              targetId: newSub.id,
-              result: 'SUCCESS',
-              ip,
-              meta: {
-                originalAssignmentId: updatedAssignment.id,
-                substituteUserId: newSub.userId,
-                slotId: slot.id,
-              },
-            },
-          });
+        if (subOutcome.newAssignment) {
+          substituteAssignmentId = subOutcome.newAssignment.id;
+        } else {
+          diagnosis = subOutcome.diagnosis;
         }
       }
     }
@@ -988,9 +1188,10 @@ export async function consumeConfirmationTokenWithAudit(params: ConsumeConfirmat
       success: true,
       action,
       assignmentId: updatedAssignment.id,
-      status: updatedAssignment.status,
+      status: substituteAssignmentId ? 'SUBSTITUTED' : updatedAssignment.status,
       memberFirstName: actionToken.user.name.split(' ')[0] || actionToken.user.name,
       substituteAssignmentId,
+      diagnosis,
     };
   });
 }
@@ -1740,7 +1941,7 @@ export async function removeDepartmentMemberInternal(
   const futureAssignments = await tx.assignment.findMany({
     where: {
       userId,
-      status: { in: ['PENDING', 'CONFIRMED'] },
+      status: { in: ['PENDING', 'CONFIRMED', 'PENDING_APPROVAL'] },
       slot: {
         departmentId,
         startsAt: { gte: now },
@@ -1762,119 +1963,27 @@ export async function removeDepartmentMemberInternal(
 
   for (const assignment of futureAssignments) {
     const slot = assignment.slot;
+    const removalReason = `Desvinculado do departamento ${member.department.name}`;
 
-    // Busca outros membros ativos do departamento na mesma congregação
-    const otherMembers = await tx.user.findMany({
-      where: {
-        id: { not: userId },
-        status: 'ACTIVE',
-        ...(slot.department.churchId ? { churchId: slot.department.churchId } : {}),
-        memberships: {
-          some: {
-            departmentId: slot.departmentId,
-            ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
-          },
-        },
-      },
-      include: {
-        memberships: {
-          include: { functions: true },
-        },
-        availabilities: true,
-        assignments: {
-          where: { status: { in: ['PENDING', 'CONFIRMED'] } },
-          include: {
-            slot: {
-              include: { program: true, department: true },
-            },
-          },
-        },
-      },
+    const subOutcome = await findAndAssignSubstituteInternal(tx, {
+      slot,
+      originalAssignmentId: assignment.id,
+      originalUserId: userId,
+      declinedReason: removalReason,
+      actorId,
+      ip,
+      auditAction: 'ASSIGNMENT_AUTO_SUBSTITUTED',
+      auditReasonMeta: 'DESVINCULADO_DEPARTAMENTO',
     });
 
-    const candidates: CandidateUser[] = otherMembers.map((m) => ({
-      id: m.id,
-      name: m.name,
-      status: m.status,
-      departmentMemberships: m.memberships.map((mem) => ({
-        departmentId: mem.departmentId,
-        functions: mem.functions.map((f) => ({ functionId: f.functionId })),
-      })),
-      availabilities: m.availabilities.map((av) => ({
-        kind: av.kind,
-        weekday: av.weekday,
-        from: av.from,
-        to: av.to,
-      })),
-      assignments: m.assignments.map((a) => ({
-        id: a.id,
-        startsAt: a.slot.startsAt,
-        endsAt: a.slot.endsAt,
-        status: a.status,
-        departmentName: a.slot.department.name,
-        programTitle: a.slot.program.title,
-      })),
-    }));
-
-    const requirement: SlotRequirement = {
-      id: slot.id,
-      startsAt: slot.startsAt,
-      endsAt: slot.endsAt,
-      departmentId: slot.departmentId,
-      functionId: slot.functionId || undefined,
-    };
-
-    const subResult = findBestSubstituteCandidate({
-      candidates,
-      slot: requirement,
-      declinedUserIds: [userId],
-    });
-
-    const bestCandidate = subResult.candidate;
-
-    if (bestCandidate) {
-      await tx.assignment.update({
-        where: { id: assignment.id },
-        data: {
-          status: 'SUBSTITUTED',
-          declinedReason: `Desvinculado do departamento ${member.department.name}`,
-        },
-      });
-
-      await tx.assignment.create({
-        data: {
-          slotId: slot.id,
-          userId: bestCandidate.id,
-          status: 'PENDING',
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          churchId: member.department.churchId || undefined,
-          action: 'ASSIGNMENT_AUTO_SUBSTITUTED',
-          targetType: 'Assignment',
-          targetId: assignment.id,
-          result: 'SUCCESS',
-          ip,
-          meta: {
-            reason: 'DESVINCULADO_DEPARTAMENTO',
-            originalUserId: userId,
-            substituteUserId: bestCandidate.id,
-            slotId: slot.id,
-            programTitle: slot.program.title,
-          },
-        },
-      });
-
+    if (subOutcome.newAssignment) {
       substitutedCount++;
     } else {
       await tx.assignment.update({
         where: { id: assignment.id },
         data: {
           status: 'DECLINED',
-          declinedReason: `Desvinculado do departamento ${member.department.name}`,
+          declinedReason: removalReason,
         },
       });
 
@@ -2579,129 +2688,28 @@ export async function declineWithAutoSubstitution(params: {
       };
     }
 
-    // 4. Executa a busca pelo melhor substituto
+    // 4. Executa a busca pelo melhor substituto via helper unificado
     const slot = assignment.slot;
-    const now = new Date();
-
-    // Voluntários que já recusaram este slot
-    const previousDeclined = await tx.assignment.findMany({
-      where: {
-        slotId: slot.id,
-        status: 'DECLINED',
-      },
-      select: { userId: true },
-    });
-    const declinedUserIds = [assignment.userId, ...previousDeclined.map((p) => p.userId)];
-
-    // Membros ativos do departamento pertencentes à mesma congregação
-    const members = await tx.user.findMany({
-      where: {
-        status: 'ACTIVE',
-        ...(slot.department.churchId ? { churchId: slot.department.churchId } : {}),
-        memberships: {
-          some: {
-            departmentId: slot.departmentId,
-            ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
-          },
-        },
-      },
-      include: {
-        memberships: {
-          include: {
-            functions: true,
-          },
-        },
-        availabilities: true,
-        assignments: {
-          where: {
-            status: { in: ['PENDING', 'CONFIRMED'] },
-          },
-          include: {
-            slot: {
-              include: {
-                program: true,
-                department: true,
-              },
-            },
-          },
-        },
-      },
+    const subOutcome = await findAndAssignSubstituteInternal(tx, {
+      slot,
+      originalAssignmentId: assignment.id,
+      originalUserId: assignment.userId,
+      declinedReason: reason || null,
+      actorId: actorId || 'SYSTEM_AUTO_SUB',
+      ip,
     });
 
-    const candidates: CandidateUser[] = members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      status: m.status,
-      departmentMemberships: m.memberships.map((mem) => ({
-        departmentId: mem.departmentId,
-        functions: mem.functions.map((f) => ({ functionId: f.functionId })),
-      })),
-      availabilities: m.availabilities.map((av) => ({
-        kind: av.kind,
-        weekday: av.weekday,
-        from: av.from,
-        to: av.to,
-      })),
-      assignments: m.assignments.map((a) => ({
-        id: a.id,
-        startsAt: a.slot.startsAt,
-        endsAt: a.slot.endsAt,
-        status: a.status,
-        departmentName: a.slot.department.name,
-        programTitle: a.slot.program.title,
-      })),
-    }));
-
-    // Estatísticas dos últimos 60 dias para critério de rotação justa
-    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-    const recentAssignments = await tx.assignment.findMany({
-      where: {
-        createdAt: { gte: sixtyDaysAgo },
-        status: { in: ['CONFIRMED', 'PENDING'] },
-      },
-      select: {
-        userId: true,
-        createdAt: true,
-      },
-    });
-
-    const statsMap = new Map<string, { assignmentsLast60Days: number; lastAssignmentDate?: Date | null }>();
-    for (const m of members) {
-      const userAssignments = recentAssignments.filter((a) => a.userId === m.id);
-      const count = userAssignments.length;
-      let lastDate: Date | null = null;
-      if (userAssignments.length > 0) {
-        const sorted = [...userAssignments].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        lastDate = sorted[0]?.createdAt ?? null;
-      }
-      statsMap.set(m.id, { assignmentsLast60Days: count, lastAssignmentDate: lastDate });
-    }
-
-    const slotReq: SlotRequirement = {
-      id: slot.id,
-      departmentId: slot.departmentId,
-      functionId: slot.functionId,
-      startsAt: slot.startsAt,
-      endsAt: slot.endsAt,
-    };
-
-    const subResult = findBestSubstituteCandidate({
-      candidates,
-      slot: slotReq,
-      declinedUserIds,
-      statsMap,
-    });
-
-    if (!subResult.candidate) {
+    if (!subOutcome.newAssignment) {
       await tx.auditLog.create({
         data: {
           actorId,
+          churchId: slot.department.churchId || undefined,
           action: 'AUTO_SUBSTITUTION_NO_CANDIDATE',
           targetType: 'ProgramSlot',
           targetId: slot.id,
           result: 'FAILED',
           ip,
-          meta: { diagnosis: subResult.diagnosis },
+          meta: { diagnosis: subOutcome.diagnosis },
         },
       });
 
@@ -2710,56 +2718,115 @@ export async function declineWithAutoSubstitution(params: {
         newAssignment: null,
         substituteUser: null,
         autoSubstituted: false,
-        diagnosis: subResult.diagnosis,
+        diagnosis: subOutcome.diagnosis,
       };
     }
 
-    // 5. Atribui a vaga ao substituto selecionado
-    const newAssignment = await tx.assignment.create({
-      data: {
-        slotId: slot.id,
-        userId: subResult.candidate.id,
-        status: 'PENDING',
-        replacedById: assignment.id,
-      },
-      include: {
-        user: true,
-        slot: {
-          include: {
-            program: true,
-            department: true,
-            function: true,
-          },
-        },
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        actorId: actorId || 'SYSTEM_AUTO_SUB',
-        churchId: slot.department.churchId || undefined,
-        action: 'AUTO_SUBSTITUTION_ASSIGNED',
-        targetType: 'Assignment',
-        targetId: newAssignment.id,
-        result: 'SUCCESS',
-        ip,
-        meta: {
-          originalAssignmentId: assignment.id,
-          originalUserId: assignment.userId,
-          substituteUserId: newAssignment.userId,
-          slotId: slot.id,
-        },
-      },
-    });
-
     return {
-      declinedAssignment,
-      newAssignment,
-      substituteUser: newAssignment.user,
+      declinedAssignment: { ...declinedAssignment, status: 'SUBSTITUTED' as const },
+      newAssignment: subOutcome.newAssignment,
+      substituteUser: subOutcome.newAssignment.user,
       autoSubstituted: true,
       diagnosis: undefined,
     };
   });
+}
+
+/**
+ * Helper interno para carregar e validar elegibilidade de candidato a troca.
+ */
+async function validateSwapTargetCandidateInTx(
+  tx: Prisma.TransactionClient,
+  params: {
+    requesterId: string;
+    targetUserId: string;
+    originSlot: {
+      id: string;
+      departmentId: string;
+      functionId: string | null;
+      startsAt: Date;
+      endsAt: Date;
+      department: { churchId: string | null };
+    };
+    excludeAssignmentId?: string | null;
+  }
+) {
+  const { requesterId, targetUserId, originSlot, excludeAssignmentId } = params;
+
+  const target = await tx.user.findUnique({
+    where: { id: targetUserId },
+    include: {
+      memberships: {
+        include: { functions: true },
+      },
+      availabilities: true,
+      assignments: {
+        where: {
+          status: { in: ['PENDING', 'CONFIRMED', 'PENDING_APPROVAL'] },
+          ...(excludeAssignmentId ? { id: { not: excludeAssignmentId } } : {}),
+        },
+        include: {
+          slot: {
+            include: { program: true, department: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!target || target.status !== 'ACTIVE') {
+    throw new Error('Voluntário indicado não foi encontrado ou não está ativo.');
+  }
+
+  if (
+    originSlot.department.churchId &&
+    target.churchId &&
+    originSlot.department.churchId !== target.churchId
+  ) {
+    throw new Error('O voluntário indicado pertence a outra congregação.');
+  }
+
+  const targetCandidate: CandidateUser = {
+    id: target.id,
+    name: target.name,
+    status: target.status,
+    departmentMemberships: target.memberships.map((m) => ({
+      departmentId: m.departmentId,
+      functions: m.functions.map((f) => ({ functionId: f.functionId })),
+    })),
+    availabilities: target.availabilities.map((av) => ({
+      kind: av.kind,
+      weekday: av.weekday,
+      from: av.from,
+      to: av.to,
+    })),
+    assignments: target.assignments.map((a) => ({
+      id: a.id,
+      startsAt: a.slot.startsAt,
+      endsAt: a.slot.endsAt,
+      status: mapStatusForConflictCheck(a.status),
+      departmentName: a.slot.department.name,
+      programTitle: a.slot.program.title,
+    })),
+  };
+
+  const slotReq: SlotRequirement = {
+    id: originSlot.id,
+    departmentId: originSlot.departmentId,
+    functionId: originSlot.functionId,
+    startsAt: originSlot.startsAt,
+    endsAt: originSlot.endsAt,
+  };
+
+  const val = validateSwapProposal({
+    requesterId,
+    targetCandidate,
+    originSlot: slotReq,
+  });
+
+  if (!val.valid) {
+    throw new Error(val.error || 'Voluntário indicado não está apto para esta escala.');
+  }
 }
 
 /**
@@ -2812,77 +2879,12 @@ export async function createSwapRequestWithAudit(params: {
         throw new Error('Você não pode propor troca para si mesmo.');
       }
 
-      const target = await tx.user.findUnique({
-        where: { id: targetUserId },
-        include: {
-          memberships: {
-            include: { functions: true },
-          },
-          availabilities: true,
-          assignments: {
-            where: { status: { in: ['PENDING', 'CONFIRMED'] } },
-            include: {
-              slot: {
-                include: { program: true, department: true },
-              },
-            },
-          },
-        },
-      });
-
-      if (!target || target.status !== 'ACTIVE') {
-        throw new Error('Voluntário indicado não foi encontrado ou não está ativo.');
-      }
-
-      if (
-        assignment.slot.department.churchId &&
-        target.churchId &&
-        assignment.slot.department.churchId !== target.churchId
-      ) {
-        throw new Error('O voluntário indicado pertence a outra congregação.');
-      }
-
-      const targetCandidate: CandidateUser = {
-        id: target.id,
-        name: target.name,
-        status: target.status,
-        departmentMemberships: target.memberships.map((m) => ({
-          departmentId: m.departmentId,
-          functions: m.functions.map((f) => ({ functionId: f.functionId })),
-        })),
-        availabilities: target.availabilities.map((av) => ({
-          kind: av.kind,
-          weekday: av.weekday,
-          from: av.from,
-          to: av.to,
-        })),
-        assignments: target.assignments.map((a) => ({
-          id: a.id,
-          startsAt: a.slot.startsAt,
-          endsAt: a.slot.endsAt,
-          status: a.status,
-          departmentName: a.slot.department.name,
-          programTitle: a.slot.program.title,
-        })),
-      };
-
-      const slotReq: SlotRequirement = {
-        id: assignment.slot.id,
-        departmentId: assignment.slot.departmentId,
-        functionId: assignment.slot.functionId,
-        startsAt: assignment.slot.startsAt,
-        endsAt: assignment.slot.endsAt,
-      };
-
-      const val = validateSwapProposal({
+      await validateSwapTargetCandidateInTx(tx, {
         requesterId,
-        targetCandidate,
-        originSlot: slotReq,
+        targetUserId,
+        originSlot: assignment.slot,
+        excludeAssignmentId: targetAssignmentId,
       });
-
-      if (!val.valid) {
-        throw new Error(val.error || 'Voluntário indicado não está apto para esta escala.');
-      }
     }
 
     // 3. Cria a solicitação de troca
@@ -2951,7 +2953,11 @@ export async function respondSwapRequestWithAudit(params: {
       include: {
         assignment: {
           include: {
-            slot: true,
+            slot: {
+              include: {
+                department: true,
+              },
+            },
           },
         },
         requester: true,
@@ -2992,12 +2998,22 @@ export async function respondSwapRequestWithAudit(params: {
       return updated;
     }
 
+    // Valida elegibilidade (conflito de horário, limite diário, indisponibilidade e departamento/função)
+    const effectiveTargetUserId = swap.targetUserId || userId;
+    await acquireUserLock(tx, effectiveTargetUserId);
+    await validateSwapTargetCandidateInTx(tx, {
+      requesterId: swap.requesterId,
+      targetUserId: effectiveTargetUserId,
+      originSlot: swap.assignment.slot,
+      excludeAssignmentId: swap.targetAssignmentId,
+    });
+
     // Se aceitou, avança para aprovação do gestor
     const updated = await tx.swapRequest.update({
       where: { id: swapRequestId },
       data: {
         status: 'PENDING_MANAGER',
-        targetUserId: swap.targetUserId || userId, // Define alvo se era pedido aberto
+        targetUserId: effectiveTargetUserId, // Define alvo se era pedido aberto
       },
       include: {
         assignment: {
@@ -3125,6 +3141,38 @@ export async function approveSwapRequestWithLock(params: {
     // Ação: APPROVE
     if (!swap.targetUserId) {
       throw new Error('Não há voluntário substituto definido para esta troca.');
+    }
+
+    // Adquire lock e revalida elegibilidade do substituto (evita race condition entre aceite e aprovação)
+    await acquireUserLock(tx, swap.targetUserId);
+    await validateSwapTargetCandidateInTx(tx, {
+      requesterId: swap.requesterId,
+      targetUserId: swap.targetUserId,
+      originSlot: swap.assignment.slot,
+      excludeAssignmentId: swap.targetAssignmentId,
+    });
+
+    if (swap.targetAssignmentId) {
+      await acquireUserLock(tx, swap.requesterId);
+      const targetAsg = await tx.assignment.findUnique({
+        where: { id: swap.targetAssignmentId },
+        include: {
+          slot: {
+            include: {
+              department: true,
+            },
+          },
+        },
+      });
+      if (!targetAsg) {
+        throw new Error('Escala de contrapartida não encontrada.');
+      }
+      await validateSwapTargetCandidateInTx(tx, {
+        requesterId: swap.targetUserId,
+        targetUserId: swap.requesterId,
+        originSlot: targetAsg.slot,
+        excludeAssignmentId: swap.assignmentId,
+      });
     }
 
     // 1. Atualiza a titularidade da escala de origem para o novo voluntário
@@ -3441,7 +3489,7 @@ export async function previewAutoSchedule(params: {
       availabilities: true,
       assignments: {
         where: {
-          status: { in: ['CONFIRMED', 'PENDING'] },
+          status: { in: ['CONFIRMED', 'PENDING', 'PENDING_APPROVAL'] },
         },
         include: {
           slot: {
@@ -3499,7 +3547,7 @@ export async function previewAutoSchedule(params: {
         departmentId: a.slot.departmentId,
         startsAt: a.slot.startsAt,
         endsAt: a.slot.endsAt,
-        status: a.status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED',
+        status: mapStatusForConflictCheck(a.status),
       })),
       assignmentsLast60Days: pastAssignments.length,
       lastAssignmentDate: lastAssignment?.slot.startsAt || null,
@@ -3578,12 +3626,14 @@ export async function applyAutoScheduleWithLock(params: {
 
     const createdAssignments = [];
 
-    // 2. Itera e valida cada atribuição
+    // 2. Itera e valida cada atribuição com lock transacional e verificação de conflito/limite diário
     for (const item of assignments) {
       const slot = program.slots.find((s) => s.id === item.slotId);
       if (!slot) {
         throw new Error(`Slot ${item.slotId} não pertence a este programa.`);
       }
+
+      await acquireUserLock(tx, item.userId);
 
       // Verifica se o slot já não está cheio
       const currentActiveCount = await tx.assignment.count({
@@ -3608,6 +3658,51 @@ export async function applyAutoScheduleWithLock(params: {
 
       if (alreadyInSlot) {
         continue;
+      }
+
+      // Revalida elegibilidade do voluntário dentro da transação (anti-race condition)
+      const candidateUser = await tx.user.findUnique({
+        where: { id: item.userId },
+        include: {
+          availabilities: true,
+          assignments: {
+            where: {
+              status: { in: ['PENDING', 'CONFIRMED', 'PENDING_APPROVAL'] },
+            },
+            include: {
+              slot: true,
+            },
+          },
+        },
+      });
+
+      if (candidateUser) {
+        if (candidateUser.status !== 'ACTIVE') {
+          continue;
+        }
+        const unavailablePeriods = (candidateUser.availabilities || [])
+          .filter((av) => av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to)
+          .map((av) => ({ from: av.from!, to: av.to! }));
+
+        if (isDateInUnavailablePeriods(slot.startsAt, slot.endsAt, unavailablePeriods)) {
+          continue;
+        }
+
+        const activeAssignments: UserAssignmentTime[] = (candidateUser.assignments || []).map((a) => ({
+          id: a.id,
+          slotId: a.slotId,
+          departmentId: a.slot.departmentId,
+          startsAt: a.slot.startsAt,
+          endsAt: a.slot.endsAt,
+          status: mapStatusForConflictCheck(a.status),
+        }));
+
+        if (
+          findConflictingAssignment({ startsAt: slot.startsAt, endsAt: slot.endsAt }, activeAssignments) ||
+          wouldExceedDailyLimit(slot.startsAt, activeAssignments)
+        ) {
+          continue;
+        }
       }
 
       // Cria a escala em estado PENDING ou PENDING_APPROVAL (quando gerada por Pastor/Ancião)
@@ -3735,6 +3830,7 @@ export async function createMemberWithAudit(params: CreateMemberParams) {
   } = params;
 
   const normalizedEmail = email.toLowerCase().trim();
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || null;
 
   return await prisma.$transaction(async (tx) => {
     const existing = await tx.user.findUnique({
@@ -3763,7 +3859,7 @@ export async function createMemberWithAudit(params: CreateMemberParams) {
         whatsapp: whatsapp?.trim() || null,
         isMinor,
         guardianName: isMinor ? guardianName?.trim() || null : null,
-        guardianPhone: isMinor ? guardianPhone?.trim() || null : null,
+        guardianPhone: isMinor ? encryptOptionalString(guardianPhone, encryptionKey) : null,
         guardianConsentAt: isMinor ? new Date() : null,
         churchId: churchId || null,
       },
@@ -3867,159 +3963,190 @@ export async function batchImportMembersWithAudit(
     ip,
   } = params;
 
-  return await prisma.$transaction(async (tx) => {
-    // Carrega todos os departamentos e funções da igreja para mapeamento por nome
-    const departments = await tx.department.findMany({
-      where: churchId ? { churchId } : undefined,
-      include: { functions: true },
-    });
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || null;
 
-    const deptMap = new Map<string, (typeof departments)[0]>();
-    for (const d of departments) {
-      deptMap.set(d.name.toLowerCase().trim(), d);
-    }
+  return await prisma.$transaction(
+    async (tx) => {
+      // Carrega todos os departamentos e funções da igreja para mapeamento por nome
+      const departments = await tx.department.findMany({
+        where: churchId ? { churchId } : undefined,
+        include: { functions: true },
+      });
 
-    let created = 0;
-    let updated = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row) continue;
-      const rowIndex = i + 1;
-      const normalizedEmail = row.email?.toLowerCase().trim();
-
-      if (!normalizedEmail || !row.name) {
-        errors.push(`Linha ${rowIndex}: Nome ou e-mail ausente.`);
-        continue;
+      const deptMap = new Map<string, (typeof departments)[0]>();
+      for (const d of departments) {
+        deptMap.set(d.name.toLowerCase().trim(), d);
       }
 
-      try {
-        const existing = await tx.user.findUnique({
-          where: { email: normalizedEmail },
-        });
+      // Pré-carrega usuários existentes em lote para eliminar N+1 findUnique por e-mail
+      const validEmails = Array.from(
+        new Set(
+          rows
+            .map((r) => r?.email?.toLowerCase().trim())
+            .filter((e): e is string => Boolean(e))
+        )
+      );
+      const existingUsersList =
+        validEmails.length > 0 && typeof tx.user.findMany === 'function'
+          ? await tx.user.findMany({
+              where: { email: { in: validEmails } },
+            })
+          : [];
+      const existingUserMap = new Map(
+        existingUsersList.map((u) => [u.email.toLowerCase().trim(), u])
+      );
 
-        let targetUserId: string;
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+      const errors: string[] = [];
 
-        if (existing) {
-          if (updateExisting) {
-            await tx.user.update({
-              where: { id: existing.id },
-              data: {
-                name: row.name.trim(),
-                phonePrimary: row.phonePrimary?.trim() || existing.phonePrimary,
-                whatsapp: row.whatsapp?.trim() || existing.whatsapp,
-                isMinor: row.isMinor ?? existing.isMinor,
-                guardianName: row.guardianName?.trim() || existing.guardianName,
-                guardianPhone: row.guardianPhone?.trim() || existing.guardianPhone,
-              },
-            });
-            updated++;
-            targetUserId = existing.id;
-          } else {
-            skipped++;
-            targetUserId = existing.id;
-          }
-        } else {
-          const tempPassword = randomBytes(24).toString('hex') + '!Aa1';
-          const passwordHash = hashPassword(tempPassword);
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const rowIndex = i + 1;
+        const normalizedEmail = row.email?.toLowerCase().trim();
 
-          const newUser = await tx.user.create({
-            data: {
-              name: row.name.trim(),
-              email: normalizedEmail,
-              passwordHash,
-              status: defaultStatus,
-              phonePrimary: row.phonePrimary?.trim() || null,
-              whatsapp: row.whatsapp?.trim() || null,
-              isMinor: Boolean(row.isMinor),
-              guardianName: row.isMinor ? row.guardianName?.trim() || null : null,
-              guardianPhone: row.isMinor ? row.guardianPhone?.trim() || null : null,
-              guardianConsentAt: row.isMinor ? new Date() : null,
-              churchId: churchId || null,
-            },
-          });
-          created++;
-          targetUserId = newUser.id;
+        if (!normalizedEmail || !row.name) {
+          errors.push(`Linha ${rowIndex}: Nome ou e-mail ausente.`);
+          continue;
         }
 
-        // Se departamento for informado, busca e vincula
-        if (row.departmentName) {
-          const dept = deptMap.get(row.departmentName.toLowerCase().trim());
-          if (dept) {
-            const membership = await tx.departmentMember.upsert({
-              where: {
-                userId_departmentId: {
-                  userId: targetUserId,
-                  departmentId: dept.id,
+        try {
+          const existing =
+            existingUserMap.get(normalizedEmail) ??
+            (typeof tx.user.findUnique === 'function'
+              ? await tx.user.findUnique({ where: { email: normalizedEmail } })
+              : null);
+
+          let targetUserId: string;
+
+          if (existing) {
+            if (updateExisting) {
+              const updatedGuardianPhone = row.guardianPhone?.trim()
+                ? encryptOptionalString(row.guardianPhone, encryptionKey)
+                : existing.guardianPhone;
+              await tx.user.update({
+                where: { id: existing.id },
+                data: {
+                  name: row.name.trim(),
+                  phonePrimary: row.phonePrimary?.trim() || existing.phonePrimary,
+                  whatsapp: row.whatsapp?.trim() || existing.whatsapp,
+                  isMinor: row.isMinor ?? existing.isMinor,
+                  guardianName: row.guardianName?.trim() || existing.guardianName,
+                  guardianPhone: updatedGuardianPhone,
                 },
-              },
-              update: {},
-              create: {
-                departmentId: dept.id,
-                userId: targetUserId,
-                role: 'MEMBER',
+              });
+              updated++;
+              targetUserId = existing.id;
+            } else {
+              skipped++;
+              targetUserId = existing.id;
+            }
+          } else {
+            const tempPassword = randomBytes(24).toString('hex') + '!Aa1';
+            const passwordHash = hashPassword(tempPassword);
+
+            const newUser = await tx.user.create({
+              data: {
+                name: row.name.trim(),
+                email: normalizedEmail,
+                passwordHash,
+                status: defaultStatus,
+                phonePrimary: row.phonePrimary?.trim() || null,
+                whatsapp: row.whatsapp?.trim() || null,
+                isMinor: Boolean(row.isMinor),
+                guardianName: row.isMinor ? row.guardianName?.trim() || null : null,
+                guardianPhone: row.isMinor
+                  ? encryptOptionalString(row.guardianPhone, encryptionKey)
+                  : null,
+                guardianConsentAt: row.isMinor ? new Date() : null,
+                churchId: churchId || null,
               },
             });
+            existingUserMap.set(normalizedEmail, newUser);
+            created++;
+            targetUserId = newUser.id;
+          }
 
-            // Se função for informada, busca dentro do departamento
-            if (row.functionName && membership) {
-              const fn = dept.functions.find(
-                (f) => f.name.toLowerCase().trim() === row.functionName?.toLowerCase().trim()
-              );
-              if (fn) {
-                await tx.memberFunction.upsert({
-                  where: {
-                    memberId_functionId: {
+          // Se departamento for informado, busca e vincula
+          if (row.departmentName) {
+            const dept = deptMap.get(row.departmentName.toLowerCase().trim());
+            if (dept) {
+              const membership = await tx.departmentMember.upsert({
+                where: {
+                  userId_departmentId: {
+                    userId: targetUserId,
+                    departmentId: dept.id,
+                  },
+                },
+                update: {},
+                create: {
+                  departmentId: dept.id,
+                  userId: targetUserId,
+                  role: 'MEMBER',
+                },
+              });
+
+              // Se função for informada, busca dentro do departamento
+              if (row.functionName && membership) {
+                const fn = dept.functions.find(
+                  (f) => f.name.toLowerCase().trim() === row.functionName?.toLowerCase().trim()
+                );
+                if (fn) {
+                  await tx.memberFunction.upsert({
+                    where: {
+                      memberId_functionId: {
+                        memberId: membership.id,
+                        functionId: fn.id,
+                      },
+                    },
+                    update: {},
+                    create: {
                       memberId: membership.id,
                       functionId: fn.id,
                     },
-                  },
-                  update: {},
-                  create: {
-                    memberId: membership.id,
-                    functionId: fn.id,
-                  },
-                });
+                  });
+                }
               }
             }
           }
+        } catch (rowErr: unknown) {
+          const msg = rowErr instanceof Error ? rowErr.message : 'Erro ao processar linha';
+          errors.push(`Linha ${rowIndex} (${normalizedEmail}): ${msg}`);
         }
-      } catch (rowErr: unknown) {
-        const msg = rowErr instanceof Error ? rowErr.message : 'Erro ao processar linha';
-        errors.push(`Linha ${rowIndex} (${normalizedEmail}): ${msg}`);
       }
-    }
 
-    // Auditoria LGPD-compliant: somente contadores consolidados, nenhum dado pessoal
-    await tx.auditLog.create({
-      data: {
-        actorId,
-        action: 'MEMBER_BATCH_IMPORTED',
-        targetType: 'User',
-        targetId: 'batch',
-        churchId: churchId || null,
-        result: errors.length > 0 && created === 0 && updated === 0 ? 'DENIED' : 'SUCCESS',
-        ip,
-        meta: {
-          totalRows: rows.length,
-          created,
-          updated,
-          skipped,
-          errorsCount: errors.length,
+      // Auditoria LGPD-compliant: somente contadores consolidados, nenhum dado pessoal
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'MEMBER_BATCH_IMPORTED',
+          targetType: 'User',
+          targetId: 'batch',
+          churchId: churchId || null,
+          result: errors.length > 0 && created === 0 && updated === 0 ? 'DENIED' : 'SUCCESS',
+          ip,
+          meta: {
+            totalRows: rows.length,
+            created,
+            updated,
+            skipped,
+            errorsCount: errors.length,
+          },
         },
-      },
-    });
+      });
 
-    return {
-      total: rows.length,
-      created,
-      updated,
-      skipped,
-      errors,
-    };
-  });
+      return {
+        total: rows.length,
+        created,
+        updated,
+        skipped,
+        errors,
+      };
+    },
+    { timeout: 30000 }
+  );
 }
 
 export interface CreateChurchParams {
@@ -4297,6 +4424,8 @@ export async function adminUpdateMemberWithAudit(params: AdminUpdateMemberParams
     ip,
   } = params;
 
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || null;
+
   return await prisma.$transaction(async (tx) => {
     const targetUser = await tx.user.findUnique({
       where: { id: userId },
@@ -4343,12 +4472,12 @@ export async function adminUpdateMemberWithAudit(params: AdminUpdateMemberParams
     if (isMinor !== undefined) {
       dataToUpdate.isMinor = isMinor;
       dataToUpdate.guardianName = isMinor ? guardianName?.trim() || null : null;
-      dataToUpdate.guardianPhone = isMinor ? guardianPhone?.trim() || null : null;
+      dataToUpdate.guardianPhone = isMinor ? encryptOptionalString(guardianPhone, encryptionKey) : null;
     }
     if (birthDate !== undefined) {
       dataToUpdate.birthDate = birthDate ? new Date(`${birthDate}T00:00:00Z`) : null;
     }
-    if (notes !== undefined) dataToUpdate.notes = notes?.trim() || null;
+    if (notes !== undefined) dataToUpdate.notes = encryptOptionalString(notes, encryptionKey);
 
     // Regra 11: Ninguém altera o próprio papel
     if (actorId === userId && globalRole !== undefined && globalRole !== targetUser.globalRole) {
@@ -4532,113 +4661,116 @@ export async function createBatchProgramsWithAudit(params: CreateBatchProgramsPa
 
   const recurrenceGroupId = randomUUID();
 
-  return await prisma.$transaction(async (tx) => {
-    const createdPrograms = [];
+  return await prisma.$transaction(
+    async (tx) => {
+      const createdPrograms = [];
 
-    for (const d of dates) {
-      const dateStr = formatISODateOnly(d);
-      const programDate = parseSaoPauloDateTimeToUtc(dateStr, time);
+      for (const d of dates) {
+        const dateStr = formatISODateOnly(d);
+        const programDate = parseSaoPauloDateTimeToUtc(dateStr, time);
 
-      const prog = await tx.program.create({
-        data: {
-          title,
-          date: programDate,
-          churchId: churchId || null,
-          createdById: actorId,
-          createdByRole: actorRole || null,
-          recurrenceGroupId,
-          departments: {
-            create: departmentIds.map((deptId) => ({
-              departmentId: deptId,
-            })),
+        const prog = await tx.program.create({
+          data: {
+            title,
+            date: programDate,
+            churchId: churchId || null,
+            createdById: actorId,
+            createdByRole: actorRole || null,
+            recurrenceGroupId,
+            departments: {
+              create: departmentIds.map((deptId) => ({
+                departmentId: deptId,
+              })),
+            },
+            slots: {
+              create: slots.map((s) => {
+                const startsAt = parseSaoPauloDateTimeToUtc(dateStr, s.startTime || '09:00');
+                const endsAt = parseSaoPauloDateTimeToUtc(dateStr, s.endTime || '10:00');
+
+                return {
+                  title: s.title,
+                  departmentId: s.departmentId,
+                  functionId: s.functionId || null,
+                  startsAt,
+                  endsAt,
+                  requiredCount: s.requiredCount,
+                };
+              }),
+            },
           },
-          slots: {
-            create: slots.map((s) => {
-              const startsAt = parseSaoPauloDateTimeToUtc(dateStr, s.startTime || '09:00');
-              const endsAt = parseSaoPauloDateTimeToUtc(dateStr, s.endTime || '10:00');
-
-              return {
-                title: s.title,
-                departmentId: s.departmentId,
-                functionId: s.functionId || null,
-                startsAt,
-                endsAt,
-                requiredCount: s.requiredCount,
-              };
-            }),
+          include: {
+            slots: true,
           },
+        });
+
+        createdPrograms.push(prog);
+      }
+
+      // 2. Notificação aos líderes dos departamentos envolvidos
+      const managers = await tx.departmentMember.findMany({
+        where: {
+          departmentId: { in: departmentIds },
+          role: 'MANAGER',
         },
         include: {
-          slots: true,
+          user: { select: { id: true, name: true, email: true, phonePrimary: true } },
+          department: { select: { id: true, name: true } },
         },
       });
 
-      createdPrograms.push(prog);
-    }
+      for (const mgr of managers) {
+        await tx.auditLog.create({
+          data: {
+            actorId,
+            churchId: churchId || undefined,
+            action: 'LEADER_BATCH_PROGRAM_NOTIFIED',
+            targetType: 'Department',
+            targetId: mgr.departmentId,
+            result: 'SUCCESS',
+            ip,
+            meta: {
+              leaderId: mgr.userId,
+              leaderName: mgr.user.name,
+              departmentName: mgr.department.name,
+              recurrenceGroupId,
+              programCount: createdPrograms.length,
+              message: `Novos programas recorrentes (${title}) foram criados. Por favor, acesse o sistema para planejar as escalas da sua equipe.`,
+            },
+          },
+        });
+      }
 
-    // 2. Notificação aos líderes dos departamentos envolvidos
-    const managers = await tx.departmentMember.findMany({
-      where: {
-        departmentId: { in: departmentIds },
-        role: 'MANAGER',
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true, phonePrimary: true } },
-        department: { select: { id: true, name: true } },
-      },
-    });
-
-    for (const mgr of managers) {
+      // 3. Auditoria geral do lote
       await tx.auditLog.create({
         data: {
           actorId,
           churchId: churchId || undefined,
-          action: 'LEADER_BATCH_PROGRAM_NOTIFIED',
-          targetType: 'Department',
-          targetId: mgr.departmentId,
+          action: 'PROGRAM_BATCH_CREATED',
+          targetType: 'Program',
+          targetId: recurrenceGroupId,
           result: 'SUCCESS',
           ip,
           meta: {
-            leaderId: mgr.userId,
-            leaderName: mgr.user.name,
-            departmentName: mgr.department.name,
+            title,
             recurrenceGroupId,
-            programCount: createdPrograms.length,
-            message: `Novos programas recorrentes (${title}) foram criados. Por favor, acesse o sistema para planejar as escalas da sua equipe.`,
+            totalPrograms: createdPrograms.length,
+            departmentCount: departmentIds.length,
+            slotsPerProgram: slots.length,
+            startDate: recurrence.startDate,
+            endDate: recurrence.endDate,
           },
         },
       });
-    }
 
-    // 3. Auditoria geral do lote
-    await tx.auditLog.create({
-      data: {
-        actorId,
-        churchId: churchId || undefined,
-        action: 'PROGRAM_BATCH_CREATED',
-        targetType: 'Program',
-        targetId: recurrenceGroupId,
-        result: 'SUCCESS',
-        ip,
-        meta: {
-          title,
-          recurrenceGroupId,
-          totalPrograms: createdPrograms.length,
-          departmentCount: departmentIds.length,
-          slotsPerProgram: slots.length,
-          startDate: recurrence.startDate,
-          endDate: recurrence.endDate,
-        },
-      },
-    });
-
-    return {
-      success: true,
-      recurrenceGroupId,
-      createdCount: createdPrograms.length,
-      programs: createdPrograms,
-    };
-  });
+      return {
+        success: true,
+        recurrenceGroupId,
+        createdCount: createdPrograms.length,
+        programs: createdPrograms,
+      };
+    },
+    { timeout: 30000 }
+  );
 }
 
 export interface ApproveScheduleParams {
@@ -4725,6 +4857,8 @@ export async function adjustAndApproveScheduleAssignmentWithAudit(params: Adjust
   const { assignmentId, newUserId, actorId, ip } = params;
 
   return await prisma.$transaction(async (tx) => {
+    await acquireUserLock(tx, newUserId);
+
     const assignment = await tx.assignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -4749,10 +4883,58 @@ export async function adjustAndApproveScheduleAssignmentWithAudit(params: Adjust
 
     const newUser = await tx.user.findUnique({
       where: { id: newUserId },
+      include: {
+        availabilities: true,
+        assignments: {
+          where: {
+            id: { not: assignmentId },
+            status: { in: ['PENDING', 'CONFIRMED', 'PENDING_APPROVAL'] },
+          },
+          include: {
+            slot: true,
+          },
+        },
+      },
     });
 
     if (!newUser || newUser.status !== 'ACTIVE') {
       throw new Error('Novo voluntário não encontrado ou inativo.');
+    }
+
+    const slot = assignment.slot;
+    if (slot.department.churchId && newUser.churchId && slot.department.churchId !== newUser.churchId) {
+      throw new Error('Não é possível escalar um voluntário vinculado a outra congregação.');
+    }
+
+    const unavailablePeriods = (newUser.availabilities || [])
+      .filter((av) => av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to)
+      .map((av) => ({ from: av.from!, to: av.to! }));
+
+    if (isDateInUnavailablePeriods(slot.startsAt, slot.endsAt, unavailablePeriods)) {
+      throw new Error(
+        `Não foi possível escalar ${newUser.name}. Ela(e) registrou indisponibilidade para este período.`
+      );
+    }
+
+    const activeAssignments: UserAssignmentTime[] = (newUser.assignments || []).map((a) => ({
+      id: a.id,
+      slotId: a.slotId,
+      departmentId: a.slot.departmentId,
+      startsAt: a.slot.startsAt,
+      endsAt: a.slot.endsAt,
+      status: mapStatusForConflictCheck(a.status),
+    }));
+
+    if (findConflictingAssignment({ startsAt: slot.startsAt, endsAt: slot.endsAt }, activeAssignments)) {
+      throw new Error(
+        `Não foi possível escalar ${newUser.name}. Ela(e) já tem uma escala nesse horário.`
+      );
+    }
+
+    if (wouldExceedDailyLimit(slot.startsAt, activeAssignments)) {
+      throw new Error(
+        `Não foi possível escalar ${newUser.name}. Já são 2 escalas neste dia.`
+      );
     }
 
     const updated = await tx.assignment.update({

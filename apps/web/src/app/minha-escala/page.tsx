@@ -7,7 +7,10 @@ import { revalidatePath } from 'next/cache';
 
 import { CalendarSubscriptionButton } from '@/components/CalendarSubscriptionButton';
 import { HandsPraying } from '@/components/Icons';
-import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
+import {
+  notifyAutoSubstitution,
+  notifyManagerOpenSlot,
+} from '@/services/notifications/swap-and-sub-notifications';
 import { MinhaEscalaClient, VolunteerAssignmentItem } from './MinhaEscalaClient';
 
 export default async function MinhaEscalaPage() {
@@ -86,6 +89,12 @@ export default async function MinhaEscalaPage() {
         reason,
         actorId: currentSession.userId,
       }).catch((err) => console.error('Erro ao notificar substituto:', err));
+    } else {
+      notifyManagerOpenSlot({
+        assignmentId,
+        reason,
+        diagnosis: result.diagnosis,
+      }).catch((err) => console.error('Erro ao notificar gestor sobre vaga aberta:', err));
     }
 
     revalidatePath('/minha-escala');

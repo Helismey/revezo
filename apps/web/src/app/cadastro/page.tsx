@@ -29,6 +29,9 @@ export default function RegisterPage() {
     joinedAt: '',
     preferredChannel: 'WHATSAPP',
     notes: '',
+    isMinor: false,
+    guardianName: '',
+    guardianPhone: '+55',
     termsAccepted: false,
   });
 
@@ -103,6 +106,9 @@ export default function RegisterPage() {
         preferredChannel: formData.preferredChannel,
         churchId: formData.churchId || undefined,
         notes: formData.notes || undefined,
+        isMinor: formData.isMinor,
+        guardianName: formData.isMinor ? formData.guardianName : undefined,
+        guardianPhone: formData.isMinor ? formData.guardianPhone : undefined,
         termsAccepted: formData.termsAccepted,
       };
 
@@ -359,6 +365,58 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Consentimento de Menor de Idade (LGPD Art. 14) */}
+          <div className="border-b border-line pb-6 space-y-4">
+            <label className="flex items-start space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="isMinor"
+                checked={formData.isMinor}
+                onChange={handleChange}
+                className="mt-1 h-5 w-5 text-primary rounded border-field-border focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-ink">
+                Sou menor de 18 anos (requer ciência e consentimento de responsável legal)
+              </span>
+            </label>
+
+            {formData.isMinor && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
+                <div>
+                  <label className="block text-sm font-semibold text-ink mb-1" htmlFor="guardianName">
+                    Nome do Responsável Legal *
+                  </label>
+                  <input
+                    id="guardianName"
+                    name="guardianName"
+                    type="text"
+                    required={formData.isMinor}
+                    value={formData.guardianName}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-field-border rounded-control text-ink text-base focus:ring-2 focus:ring-primary min-h-touch"
+                    placeholder="Nome completo do pai, mãe ou tutor"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-ink mb-1" htmlFor="guardianPhone">
+                    Telefone do Responsável (com DDD) *
+                  </label>
+                  <input
+                    id="guardianPhone"
+                    name="guardianPhone"
+                    type="text"
+                    required={formData.isMinor}
+                    value={formData.guardianPhone}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-field-border rounded-control text-ink text-base focus:ring-2 focus:ring-primary min-h-touch"
+                    placeholder="+5562999990000"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Termos de Privacidade e Consentimento LGPD */}

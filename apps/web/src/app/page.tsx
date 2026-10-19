@@ -2,7 +2,10 @@ import React from 'react';
 import Link from 'next/link';
 import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
+import {
+  notifyAutoSubstitution,
+  notifyManagerOpenSlot,
+} from '@/services/notifications/swap-and-sub-notifications';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { can } from '@revezo/domain';
@@ -202,6 +205,12 @@ export default async function DashboardPage() {
         reason,
         actorId: currentSession.userId,
       }).catch((err) => console.error('Erro ao notificar substituto:', err));
+    } else {
+      notifyManagerOpenSlot({
+        assignmentId,
+        reason,
+        diagnosis: result.diagnosis,
+      }).catch((err) => console.error('Erro ao notificar gestor sobre vaga aberta:', err));
     }
 
     revalidatePath('/');

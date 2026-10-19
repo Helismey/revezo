@@ -44,26 +44,48 @@ export const emergencyContactSchema = z.object({
   phone: z.string().trim().regex(phoneRegex, 'Telefone de emergência deve estar no padrão internacional (+55...)'),
 });
 
-export const registerSchema = z.object({
-  name: z.string().trim().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
-  email: z.string().trim().email('E-mail inválido'),
-  password: z.string().min(12, 'A senha deve ter no mínimo 12 caracteres').max(128),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento deve estar no formato AAAA-MM-DD').optional(),
-  gender: z.enum(['MASCULINO', 'FEMININO', 'OUTRO']).optional(),
-  maritalStatus: z.enum(['SOLTEIRO', 'CASADO', 'DIVORCIADO', 'VIUVO', 'OUTRO']).optional(),
-  phonePrimary: z.string().trim().regex(phoneRegex, 'Telefone principal deve estar no padrão internacional (+55...)'),
-  phoneSecondary: z.string().trim().regex(phoneRegex, 'Telefone secundário inválido').optional().or(z.literal('')),
-  whatsapp: z.string().trim().regex(phoneRegex, 'WhatsApp deve estar no padrão internacional (+55...)').optional().or(z.literal('')),
-  address: addressSchema.optional(),
-  emergencyContact: emergencyContactSchema.optional(),
-  joinedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de entrada ou batismo inválida').optional(),
-  preferredChannel: z.enum(['WHATSAPP', 'EMAIL', 'PUSH', 'SMS']).default('WHATSAPP'),
-  churchId: z.string().optional(),
-  notes: z.string().max(500, 'Observações muito longas').optional(),
-  termsAccepted: z.literal(true, {
-    errorMap: () => ({ message: 'Você precisa aceitar os termos de privacidade para continuar' }),
-  }),
-});
+export const registerSchema = z
+  .object({
+    name: z.string().trim().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
+    email: z.string().trim().email('E-mail inválido'),
+    password: z.string().min(12, 'A senha deve ter no mínimo 12 caracteres').max(128),
+    birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento deve estar no formato AAAA-MM-DD').optional(),
+    gender: z.enum(['MASCULINO', 'FEMININO', 'OUTRO']).optional(),
+    maritalStatus: z.enum(['SOLTEIRO', 'CASADO', 'DIVORCIADO', 'VIUVO', 'OUTRO']).optional(),
+    phonePrimary: z.string().trim().regex(phoneRegex, 'Telefone principal deve estar no padrão internacional (+55...)'),
+    phoneSecondary: z.string().trim().regex(phoneRegex, 'Telefone secundário inválido').optional().or(z.literal('')),
+    whatsapp: z.string().trim().regex(phoneRegex, 'WhatsApp deve estar no padrão internacional (+55...)').optional().or(z.literal('')),
+    address: addressSchema.optional(),
+    emergencyContact: emergencyContactSchema.optional(),
+    joinedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de entrada ou batismo inválida').optional(),
+    preferredChannel: z.enum(['WHATSAPP', 'EMAIL', 'PUSH', 'SMS']).default('WHATSAPP'),
+    churchId: z.string().optional(),
+    notes: z.string().max(500, 'Observações muito longas').optional(),
+    isMinor: z.boolean().optional(),
+    guardianName: z.string().trim().max(100).optional(),
+    guardianPhone: z.string().trim().regex(phoneRegex, 'Telefone do responsável deve estar no padrão internacional (+55...)').optional().or(z.literal('')),
+    termsAccepted: z.literal(true, {
+      errorMap: () => ({ message: 'Você precisa aceitar os termos de privacidade para continuar' }),
+    }),
+  })
+  .superRefine((val, ctx) => {
+    if (val.isMinor) {
+      if (!val.guardianName || val.guardianName.trim().length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['guardianName'],
+          message: 'Para voluntários menores de idade, o nome do responsável legal é obrigatório',
+        });
+      }
+      if (!val.guardianPhone || !phoneRegex.test(val.guardianPhone.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['guardianPhone'],
+          message: 'Para voluntários menores de idade, o telefone do responsável legal (+55...) é obrigatório',
+        });
+      }
+    }
+  });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 

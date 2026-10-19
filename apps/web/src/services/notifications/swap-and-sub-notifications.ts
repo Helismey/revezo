@@ -5,6 +5,8 @@ import {
   renderSwapApprovedNoticeMessage,
   renderRegistrationApprovedMessage,
   renderRegistrationRejectedMessage,
+  formatScheduleDateTimePtBr,
+  wrapEmailHtmlLayout,
 } from '@revezo/domain';
 import { notificationDispatcher } from './dispatcher';
 
@@ -19,7 +21,8 @@ function getBaseUrl(): string {
 }
 
 /**
- * Dispara notificação imediata quando um voluntário é escalado automaticamente como substituto.
+ * Dispara notificação imediata quando um voluntário é escalado automaticamente como substituto
+ * (avisa o substituto E os gestores do departamento conforme Regra de Negócio 4).
  */
 export async function notifyAutoSubstitution(params: {
   substituteAssignmentId: string;
@@ -89,8 +92,192 @@ export async function notifyAutoSubstitution(params: {
       assignmentId: assignment.id,
       kind: 'SUBSTITUTION',
     });
+
+    // 4. Regra 4: Avisa também os gestores do departamento sobre a substituição realizada
+    const managers = await prisma.departmentMember.findMany({
+      where: {
+        departmentId: assignment.slot.departmentId,
+        role: 'MANAGER',
+        user: { status: 'ACTIVE' },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    const { dateStr, timeStr } = formatScheduleDateTimePtBr(
+      assignment.slot.startsAt,
+      assignment.slot.endsAt
+    );
+    const roleLabel = assignment.slot.function?.name || assignment.slot.title;
+    const scheduleUrl = `${baseUrl}/escalas`;
+
+    for (const mgr of managers) {
+      if (mgr.userId === assignment.user.id) continue;
+      const mgrFirstName = mgr.user.name.split(' ')[0] || mgr.user.name;
+      const subject = `Substituição automática em ${assignment.slot.department.name}: ${assignment.slot.program.title}`;
+      const bodyText = [
+        `Olá, ${mgrFirstName}!`,
+        ``,
+        `Houve uma desmarcação no departamento ${assignment.slot.department.name} (${roleLabel}) para o programa "${assignment.slot.program.title}" (${dateStr}, ${timeStr}).`,
+        `O sistema escalou automaticamente ${assignment.user.name} como substituto(a) elegível.`,
+        reason ? `Motivo informado: ${reason}` : '',
+        ``,
+        `Acompanhe o painel de escalas: ${scheduleUrl}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const bodyHtml = wrapEmailHtmlLayout({
+        title: subject,
+        previewText: `${assignment.user.name} foi escalado(a) como substituto(a) em ${assignment.slot.department.name}`,
+        contentHtml: `
+          <h2 style="color: #0F4C5C; font-size: 20px; margin-top: 0; margin-bottom: 16px;">Substituição Automática Realizada</h2>
+          <p style="margin: 0 0 12px 0;">Olá, <strong>${mgrFirstName}</strong>!</p>
+          <p style="margin: 0 0 12px 0;">Houve uma desmarcação em <strong>${assignment.slot.department.name}</strong> (${roleLabel}) no programa <strong>${assignment.slot.program.title}</strong> (${dateStr}, ${timeStr}).</p>
+          <p style="margin: 0 0 12px 0;">O sistema atribuiu automaticamente a vaga para <strong>${assignment.user.name}</strong>.</p>
+          ${reason ? `<p style="margin: 0 0 12px 0; color: #475569;"><strong>Motivo informado:</strong> ${reason}</p>` : ''}
+          <p style="margin: 20px 0;">
+            <a href="${scheduleUrl}" class="btn" style="display: inline-block; padding: 12px 24px; background-color: #0F4C5C; color: #FFFFFF; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">Ver Escalas</a>
+          </p>
+        `,
+      });
+
+      await notificationDispatcher.dispatch({
+        recipient: {
+          userId: mgr.user.id,
+          name: mgr.user.name,
+          email: mgr.user.email,
+          phonePrimary: mgr.user.phonePrimary,
+          preferredChannel: mgr.user.preferredChannel as any,
+          optOutWhatsapp: mgr.user.optOutWhatsapp,
+          optOutEmail: mgr.user.optOutEmail,
+          optOutPush: mgr.user.optOutPush,
+          optOutSms: mgr.user.optOutSms,
+        },
+        message: {
+          subject,
+          title: subject,
+          bodyText,
+          bodyHtml,
+          actionUrl: scheduleUrl,
+          actionText: 'Ver Escalas',
+        },
+        assignmentId: assignment.id,
+        kind: 'SUBSTITUTION',
+      });
+    }
   } catch (err: unknown) {
     console.error('Erro ao despachar notificação de substituição automática:', err);
+  }
+}
+
+/**
+ * Alerta os gestores do departamento quando uma desmarcação deixa o slot ABERTO (sem substituto elegível).
+ */
+export async function notifyManagerOpenSlot(params: {
+  assignmentId: string;
+  reason?: string | null;
+  diagnosis?: string;
+}): Promise<void> {
+  const { assignmentId, reason, diagnosis } = params;
+
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) return;
+
+    const managers = await prisma.departmentMember.findMany({
+      where: {
+        departmentId: assignment.slot.departmentId,
+        role: 'MANAGER',
+        user: { status: 'ACTIVE' },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    if (managers.length === 0) return;
+
+    const baseUrl = getBaseUrl();
+    const openSlotsUrl = `${baseUrl}/slots-abertos`;
+    const { dateStr, timeStr } = formatScheduleDateTimePtBr(
+      assignment.slot.startsAt,
+      assignment.slot.endsAt
+    );
+    const roleLabel = assignment.slot.function?.name || assignment.slot.title;
+
+    for (const mgr of managers) {
+      const mgrFirstName = mgr.user.name.split(' ')[0] || mgr.user.name;
+      const subject = `Atenção: vaga em aberto em ${assignment.slot.department.name} (${assignment.slot.program.title})`;
+      const bodyText = [
+        `Olá, ${mgrFirstName}!`,
+        ``,
+        `${assignment.user.name} informou que não poderá comparecer em ${assignment.slot.department.name} (${roleLabel}) no programa "${assignment.slot.program.title}" (${dateStr}, ${timeStr}).`,
+        `Nenhum substituto automático elegível foi encontrado e a vaga ficou em aberto.`,
+        reason ? `Motivo informado: ${reason}` : '',
+        diagnosis ? `Diagnóstico: ${diagnosis}` : '',
+        ``,
+        `Acesse as vagas em aberto para atribuir outro voluntário: ${openSlotsUrl}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const bodyHtml = wrapEmailHtmlLayout({
+        title: subject,
+        previewText: `Vaga em aberto em ${assignment.slot.department.name} após desmarcação`,
+        contentHtml: `
+          <h2 style="color: #B45309; font-size: 20px; margin-top: 0; margin-bottom: 16px;">Atenção: Vaga em Aberto</h2>
+          <p style="margin: 0 0 12px 0;">Olá, <strong>${mgrFirstName}</strong>!</p>
+          <p style="margin: 0 0 12px 0;"><strong>${assignment.user.name}</strong> desmarcou sua participação em <strong>${assignment.slot.department.name}</strong> (${roleLabel}) no programa <strong>${assignment.slot.program.title}</strong> (${dateStr}, ${timeStr}).</p>
+          <p style="margin: 0 0 12px 0;">Nenhum substituto elegível foi encontrado automaticamente e o slot ficou <strong>ABERTO</strong>.</p>
+          ${reason ? `<p style="margin: 0 0 8px 0; color: #475569;"><strong>Motivo informado:</strong> ${reason}</p>` : ''}
+          ${diagnosis ? `<p style="margin: 0 0 12px 0; color: #475569;"><strong>Diagnóstico:</strong> ${diagnosis}</p>` : ''}
+          <p style="margin: 20px 0;">
+            <a href="${openSlotsUrl}" class="btn" style="display: inline-block; padding: 12px 24px; background-color: #B45309; color: #FFFFFF; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">Resolver Vaga em Aberto</a>
+          </p>
+        `,
+      });
+
+      await notificationDispatcher.dispatch({
+        recipient: {
+          userId: mgr.user.id,
+          name: mgr.user.name,
+          email: mgr.user.email,
+          phonePrimary: mgr.user.phonePrimary,
+          preferredChannel: mgr.user.preferredChannel as any,
+          optOutWhatsapp: mgr.user.optOutWhatsapp,
+          optOutEmail: mgr.user.optOutEmail,
+          optOutPush: mgr.user.optOutPush,
+          optOutSms: mgr.user.optOutSms,
+        },
+        message: {
+          subject,
+          title: subject,
+          bodyText,
+          bodyHtml,
+          actionUrl: openSlotsUrl,
+          actionText: 'Resolver Vaga em Aberto',
+        },
+        assignmentId: assignment.id,
+        kind: 'SUBSTITUTION',
+      });
+    }
+  } catch (err: unknown) {
+    console.error('Erro ao notificar gestores sobre slot aberto:', err);
   }
 }
 

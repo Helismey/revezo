@@ -2,7 +2,12 @@ import React from 'react';
 import { redirect } from 'next/navigation';
 import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@revezo/domain';
+import {
+  can,
+  decryptSensitiveJson,
+  decryptEmergencyContact,
+  decryptOptionalString,
+} from '@revezo/domain';
 import { PerfilClient } from './PerfilClient';
 
 export default async function PerfilPage() {
@@ -34,6 +39,11 @@ export default async function PerfilPage() {
     redirect('/login');
   }
 
+  const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || process.env.AUTH_SECRET || null;
+  const decryptedAddress = decryptSensitiveJson<Record<string, string>>(user.address, encryptionKey);
+  const decryptedEmergencyContact = decryptEmergencyContact(user.emergencyContact, encryptionKey);
+  const decryptedNotes = decryptOptionalString(user.notes, encryptionKey);
+
   const initialData = {
     id: user.id,
     name: user.name,
@@ -45,7 +55,7 @@ export default async function PerfilPage() {
     phonePrimary: user.phonePrimary || '',
     phoneSecondary: user.phoneSecondary || '',
     whatsapp: user.whatsapp || '',
-    address: (user.address as any) || {
+    address: decryptedAddress || {
       street: '',
       number: '',
       complement: '',
@@ -54,14 +64,14 @@ export default async function PerfilPage() {
       state: '',
       postalCode: '',
     },
-    emergencyContact: (user.emergencyContact as any) || {
+    emergencyContact: decryptedEmergencyContact || {
       name: '',
       relationship: '',
       phone: '',
     },
     joinedAt: user.joinedAt ? user.joinedAt.toISOString().split('T')[0] : '',
     preferredChannel: user.preferredChannel || 'WHATSAPP',
-    notes: user.notes || '',
+    notes: decryptedNotes || '',
     globalRole: user.globalRole,
     status: user.status,
     optOutWhatsapp: user.optOutWhatsapp,

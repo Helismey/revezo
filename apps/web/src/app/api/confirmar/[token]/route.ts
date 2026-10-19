@@ -6,7 +6,10 @@ import {
   prisma,
 } from '@revezo/db';
 import { HybridRateLimiter } from '@revezo/domain';
-import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
+import {
+  notifyAutoSubstitution,
+  notifyManagerOpenSlot,
+} from '@/services/notifications/swap-and-sub-notifications';
 
 // Rate limiter por IP para prevenir abusos e enumeração de URLs públicas
 const publicActionLimiter = new HybridRateLimiter({
@@ -121,6 +124,12 @@ export async function POST(
         reason: parsed.data.reason,
         actorId: 'TOKEN_PUBLIC_ACTION',
       }).catch((err) => console.error('Erro ao notificar substituto via token:', err));
+    } else if (parsed.data.action === 'DECLINE') {
+      notifyManagerOpenSlot({
+        assignmentId: result.assignmentId,
+        reason: parsed.data.reason,
+        diagnosis: result.diagnosis,
+      }).catch((err) => console.error('Erro ao notificar gestor sobre vaga aberta via token:', err));
     }
 
     return NextResponse.json({

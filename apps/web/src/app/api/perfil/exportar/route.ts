@@ -53,7 +53,8 @@ export async function GET() {
     }
 
     // Geração do arquivo seguro em conformidade com o Art. 18 da LGPD
-    const exportedPayload = exportMemberData(user as any);
+    const encryptionKey = process.env.FIELD_ENCRYPTION_KEY || process.env.AUTH_SECRET;
+    const exportedPayload = exportMemberData(user as any, encryptionKey);
 
     // Trilha de auditoria
     await prisma.auditLog.create({
