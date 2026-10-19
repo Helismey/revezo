@@ -50,6 +50,8 @@ export function CalendarSubscriptionButton() {
       <button
         type="button"
         onClick={handleOpenModal}
+        aria-haspopup="dialog"
+        aria-expanded={modalOpen}
         className="px-3.5 py-2 bg-bg border border-line text-ink font-semibold rounded-control text-xs sm:text-sm hover:bg-surface min-h-touch inline-flex items-center gap-2 transition-colors"
       >
         <Calendar size={18} />
@@ -57,12 +59,17 @@ export function CalendarSubscriptionButton() {
       </button>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-modal-title"
+        >
           <div className="bg-surface rounded-surface border border-line max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <Calendar size={20} className="text-primary flex-shrink-0" />
-                <h3 className="font-display font-bold text-lg text-ink">
+                <h3 id="calendar-modal-title" className="font-display font-bold text-lg text-ink">
                   Sincronizar Escalas com o Calendário
                 </h3>
               </div>

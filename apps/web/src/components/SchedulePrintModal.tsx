@@ -52,7 +52,12 @@ export function SchedulePrintModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-ink/60 backdrop-blur-sm overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-ink/60 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="print-modal-title"
+    >
       {/* Estilos dedicados para impressão em folha A4 */}
       <style jsx global>{`
         @media print {
@@ -101,7 +106,7 @@ export function SchedulePrintModal({
         {/* Barra superior de controles na tela (Oculta na impressão) */}
         <div className="p-4 sm:p-5 border-b border-line flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg/50 no-print">
           <div>
-            <h2 className="font-display font-bold text-lg text-ink flex items-center gap-2">
+            <h2 id="print-modal-title" className="font-display font-bold text-lg text-ink flex items-center gap-2">
               <Printer size={20} className="text-primary" />
               Impressão de Escala para Mural (Folha A4)
             </h2>
@@ -124,6 +129,7 @@ export function SchedulePrintModal({
               onClick={onClose}
               className="p-2 text-ink-muted hover:text-ink rounded-control hover:bg-line/40 transition-colors"
               title="Fechar"
+              aria-label="Fechar modal de impressão"
             >
               <X size={20} />
             </button>
