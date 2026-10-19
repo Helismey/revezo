@@ -41,6 +41,22 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -51,6 +67,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Gerar cliente Prisma
         run: pnpm db:generate
+      - name: Criar estrutura do banco (Push)
+        run: pnpm --filter @revezo/db push
       - name: Build dos pacotes internos
         run: pnpm -r --filter=!@revezo/web build
       - run: pnpm test
