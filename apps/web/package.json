@@ -24,7 +24,7 @@
     "@revezo/db": "workspace:*",
     "@revezo/domain": "workspace:*",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.2",
+    "@supabase/supabase-js": "^2.118.0",
     "next": "^15.5.28",
     "papaparse": "^5.7.0",
     "qrcode": "^1.5.4",
