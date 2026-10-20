@@ -47,3 +47,18 @@ updates:
       # Sem versão corrigida acima de 3.0.3 no npm (GHSA-vfj7-8cjw-p6xm, dependência transitiva de build via tailwindcss)
       - dependency-name: "braces"
         versions: ["<=3.0.3"]
+      # Bloqueia upgrades de versão major automática para pacotes core com breaking changes estruturais
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
