@@ -95,6 +95,7 @@ export function CalendarSubscriptionButton() {
                       <input
                         type="text"
                         readOnly
+                        aria-label="Link de assinatura do calendário"
                         value={calendarLinks.webcalUrl}
                         className="flex-1 px-3 py-1.5 bg-surface border border-field-border rounded-control text-xs font-mono text-ink select-all"
                       />
