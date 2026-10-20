@@ -16,7 +16,7 @@
     "push": "prisma db push",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "seed": "tsx src/seed.ts",
+    "seed": "pnpm --filter @revezo/domain... build && tsx src/seed.ts",
     "build": "prisma generate && tsc -b",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"

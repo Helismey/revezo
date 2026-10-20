@@ -56,8 +56,127 @@ describe('Motor de Escala: Geração Automática (generateProgramSchedule)', () 
     expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0]?.candidate.id).toBe('user-b');
     expect(result.proposals[0]?.candidate.name).toBe('Bernardo Souza');
+    expect(result.proposals[0]?.candidate.assignmentsLast60Days).toBe(1);
+    expect(result.proposals[0]?.reason).toBe('1 escala(s) nos últimos 60 dias');
     expect(result.unfilledSlots).toHaveLength(0);
+    expect(result.totalSlotsEvaluated).toBe(1);
     expect(result.totalFilled).toBe(1);
+  });
+
+  it('atribui mensagem de alta prioridade de rodízio quando o voluntário tem 0 escalas nos últimos 60 dias', () => {
+    const volunteerZero: CandidateWithHistory = {
+      id: 'user-zero',
+      name: 'Zero Escalas',
+      status: 'ACTIVE',
+      departmentMemberships: [
+        {
+          departmentId: 'dept-louvor',
+          functions: [{ functionId: 'func-vocal' }],
+        },
+      ],
+      assignmentsLast60Days: 0,
+    };
+
+    const result = generateProgramSchedule({
+      slots: [baseSlot],
+      candidates: [volunteerZero],
+    });
+
+    expect(result.proposals).toHaveLength(1);
+    expect(result.proposals[0]?.reason).toBe(
+      'Nenhuma escala nos últimos 60 dias (alta prioridade de rodízio)'
+    );
+    expect(result.proposals[0]?.candidate.assignmentsLast60Days).toBe(0);
+  });
+
+  it('ordena os slots cronologicamente antes de preencher e atualiza carga e data em múltiplos slots', () => {
+    const slotTarde: AutoScheduleSlotInput = {
+      ...baseSlot,
+      id: 'slot-tarde',
+      title: 'Louvor Tarde',
+      startsAt: '2026-10-18T15:00:00Z',
+      endsAt: '2026-10-18T16:30:00Z',
+    };
+    const slotManha: AutoScheduleSlotInput = {
+      ...baseSlot,
+      id: 'slot-manha',
+      title: 'Louvor Manhã',
+      startsAt: '2026-10-18T09:00:00Z',
+      endsAt: '2026-10-18T10:30:00Z',
+    };
+
+    const candA: CandidateWithHistory = {
+      ...volunteerA,
+      id: 'user-a',
+      assignmentsLast60Days: 0,
+      lastAssignmentDate: null,
+    };
+    const candB: CandidateWithHistory = {
+      ...volunteerB,
+      id: 'user-b',
+      assignmentsLast60Days: 0,
+      lastAssignmentDate: null,
+    };
+
+    const result = generateProgramSchedule({
+      slots: [slotTarde, slotManha],
+      candidates: [candA, candB],
+    });
+
+    expect(result.proposals).toHaveLength(2);
+    expect(result.proposals[0]?.slotId).toBe('slot-manha');
+    expect(result.proposals[0]?.candidate.id).toBe('user-a');
+    expect(result.proposals[0]?.reason).toBe(
+      'Nenhuma escala nos últimos 60 dias (alta prioridade de rodízio)'
+    );
+
+    expect(result.proposals[1]?.slotId).toBe('slot-tarde');
+    expect(result.proposals[1]?.candidate.id).toBe('user-b');
+  });
+
+  it('preenche múltiplas vagas no mesmo slot sem repetir a mesma pessoa e registra vagas faltantes (missingCount)', () => {
+    const multiSlot: AutoScheduleSlotInput = {
+      ...baseSlot,
+      id: 'slot-multi',
+      requiredCount: 3,
+      currentAssignments: [{ userId: 'user-a' }],
+    };
+
+    const result = generateProgramSchedule({
+      slots: [multiSlot],
+      candidates: [volunteerA, volunteerB],
+    });
+
+    expect(result.proposals).toHaveLength(1);
+    expect(result.proposals[0]?.candidate.id).toBe('user-b');
+    expect(result.totalFilled).toBe(1);
+    expect(result.unfilledSlots).toHaveLength(1);
+    expect(result.unfilledSlots[0]?.missingCount).toBe(1);
+    expect(result.unfilledSlots[0]?.diagnosis).toContain('recusou');
+  });
+
+  it('considera escalas já existentes (c.assignments) do candidato antes de iniciar a geração', () => {
+    const candidateWithExistingConflict: CandidateWithHistory = {
+      ...volunteerB,
+      assignmentsLast60Days: 0,
+      assignments: [
+        {
+          id: 'existing-asg-1',
+          startsAt: '2026-10-18T09:00:00Z',
+          endsAt: '2026-10-18T10:30:00Z',
+          status: 'CONFIRMED',
+        },
+      ],
+    };
+
+    const result = generateProgramSchedule({
+      slots: [baseSlot],
+      candidates: [candidateWithExistingConflict],
+    });
+
+    expect(result.proposals).toHaveLength(0);
+    expect(result.unfilledSlots).toHaveLength(1);
+    expect(result.unfilledSlots[0]?.diagnosis).toContain('conflito de horário');
   });
 
   it('respeita o teto diário de no máximo 2 escalas por pessoa em simulação de múltiplos slots no mesmo dia', () => {

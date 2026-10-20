@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   can,
+  canModifyResourceByHierarchy,
+  ROLE_HIERARCHY_LEVEL,
   UserContext,
   maskPhoneNumber,
   maskEmail,
@@ -407,5 +409,233 @@ describe('Construtores de Consulta Scoped (Prisma Anti-IDOR Filters)', () => {
 
     const whereMembro = buildMemberScopeWhere(membroComum, 'member:create');
     expect(whereMembro).toEqual({ id: '__DENIED_EMPTY__' });
+  });
+});
+
+describe('Cobertura Exaustiva de Hierarquia, Escopo Multi-Departamento (departmentIds) e Ramificações RBAC', () => {
+  const pastorComIgrejas: UserContext = {
+    id: 'pastor-1',
+    globalRole: 'PASTOR',
+    status: 'ACTIVE',
+    pastorChurchIds: ['c-1', 'c-2'],
+    departmentMemberships: [],
+  };
+
+  const pastorSemLista: UserContext = {
+    id: 'pastor-2',
+    globalRole: 'PASTOR',
+    status: 'ACTIVE',
+    pastorChurchIds: [],
+    departmentMemberships: [],
+  };
+
+  const elder: UserContext = {
+    id: 'elder-1',
+    globalRole: 'ELDER',
+    status: 'ACTIVE',
+    churchId: 'c-1',
+    departmentMemberships: [],
+  };
+
+  const managerA: UserContext = {
+    id: 'mgr-a',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'c-1',
+    departmentMemberships: [
+      { departmentId: 'dept-a', role: 'MANAGER' },
+      { departmentId: 'dept-b', role: 'MEMBER' },
+    ],
+  };
+
+  const volunteer: UserContext = {
+    id: 'vol-1',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'c-1',
+    departmentMemberships: [{ departmentId: 'dept-a', role: 'MEMBER' }],
+  };
+
+  it('valida níveis da hierarquia (ROLE_HIERARCHY_LEVEL) e canModifyResourceByHierarchy', () => {
+    expect(ROLE_HIERARCHY_LEVEL.ADMIN_MASTER).toBe(4);
+    expect(ROLE_HIERARCHY_LEVEL.PASTOR).toBe(3);
+    expect(ROLE_HIERARCHY_LEVEL.ELDER).toBe(2);
+    expect(ROLE_HIERARCHY_LEVEL.USER).toBe(1);
+
+    expect(canModifyResourceByHierarchy('USER', null)).toBe(true);
+    expect(canModifyResourceByHierarchy('USER', undefined)).toBe(true);
+    expect(canModifyResourceByHierarchy('USER', 'USER')).toBe(true);
+    expect(canModifyResourceByHierarchy('USER', 'ELDER')).toBe(false);
+    expect(canModifyResourceByHierarchy('ELDER', 'ELDER')).toBe(true);
+    expect(canModifyResourceByHierarchy('ELDER', 'PASTOR')).toBe(false);
+    expect(canModifyResourceByHierarchy('PASTOR', 'PASTOR')).toBe(true);
+    expect(canModifyResourceByHierarchy('PASTOR', 'ADMIN_MASTER')).toBe(false);
+    expect(canModifyResourceByHierarchy('ADMIN_MASTER', 'ADMIN_MASTER')).toBe(true);
+  });
+
+  it('valida imutabilidade hierárquica em department:update, program:update e program:delete', () => {
+    // PASTOR não pode alterar nem excluir o que foi criado por ADMIN_MASTER
+    expect(can(pastorComIgrejas, 'department:update', { churchId: 'c-1', createdByRole: 'ADMIN_MASTER' })).toBe(false);
+    expect(can(pastorComIgrejas, 'program:update', { churchId: 'c-1', createdByRole: 'ADMIN_MASTER' })).toBe(false);
+    expect(can(pastorComIgrejas, 'program:delete', { churchId: 'c-1', createdByRole: 'ADMIN_MASTER' })).toBe(false);
+
+    // PASTOR pode alterar o que foi criado por PASTOR ou ELDER
+    expect(can(pastorComIgrejas, 'department:update', { churchId: 'c-1', createdByRole: 'PASTOR' })).toBe(true);
+    expect(can(pastorComIgrejas, 'department:update', { churchId: 'c-1', createdByRole: 'ELDER' })).toBe(true);
+
+    // GESTOR (USER) não pode alterar programa/departamento criado por ELDER
+    expect(can(managerA, 'department:update', { departmentId: 'dept-a', createdByRole: 'ELDER' })).toBe(false);
+    expect(can(managerA, 'program:update', { departmentId: 'dept-a', createdByRole: 'ELDER' })).toBe(false);
+    expect(can(managerA, 'program:delete', { departmentId: 'dept-a', createdByRole: 'ELDER' })).toBe(false);
+
+    // GESTOR (USER) pode alterar se criado por USER ou sem createdByRole
+    expect(can(managerA, 'department:update', { departmentId: 'dept-a', createdByRole: 'USER' })).toBe(true);
+    expect(can(managerA, 'program:delete', { departmentId: 'dept-a', createdByRole: 'USER' })).toBe(true);
+  });
+
+  it('valida escopo de PASTOR e promoção de outros usuários até PASTOR', () => {
+    // Pastor com lista vazia não sofre bloqueio de escopo por lista
+    expect(can(pastorSemLista, 'program:create', { churchId: 'qualquer' })).toBe(true);
+
+    // Pastor pode promover outro usuário para ELDER ou PASTOR, mas não ADMIN_MASTER
+    expect(can(pastorComIgrejas, 'profile:update:other', { targetUserId: 'outro', newRole: 'ELDER' })).toBe(true);
+    expect(can(pastorComIgrejas, 'profile:update:other', { targetUserId: 'outro', newRole: 'PASTOR' })).toBe(true);
+    expect(can(pastorComIgrejas, 'profile:update:other', { targetUserId: 'outro', newRole: 'ADMIN_MASTER' })).toBe(false);
+
+    // Pastor atualizando o próprio perfil via profile:update:other mantendo papel PASTOR ou sem newRole é permitido
+    expect(can(pastorComIgrejas, 'profile:update:other', { targetUserId: pastorComIgrejas.id, newRole: 'PASTOR' })).toBe(true);
+    expect(can(pastorComIgrejas, 'profile:update:other', { targetUserId: pastorComIgrejas.id })).toBe(true);
+  });
+
+  it('valida todas as ações permitidas, próprias e bloqueadas para ELDER (Ancião)', () => {
+    expect(can(elder, 'church:create')).toBe(false);
+    expect(can(elder, 'church:settings:update')).toBe(false);
+    expect(can(elder, 'church:switch')).toBe(false);
+    expect(can(elder, 'church:elder:assign')).toBe(false);
+
+    // Elder não pode promover ninguém a ELDER, PASTOR ou ADMIN_MASTER
+    expect(can(elder, 'profile:update:other', { targetUserId: 'outro', newRole: 'ELDER' })).toBe(false);
+    expect(can(elder, 'profile:update:other', { targetUserId: 'outro', newRole: 'PASTOR' })).toBe(false);
+    expect(can(elder, 'profile:update:other', { targetUserId: 'outro', newRole: 'ADMIN_MASTER' })).toBe(false);
+
+    // Elder pode atualizar outro usuário para USER ou sem newRole
+    expect(can(elder, 'profile:update:other', { targetUserId: 'outro', newRole: 'USER' })).toBe(true);
+    expect(can(elder, 'profile:update:other', { targetUserId: 'outro' })).toBe(true);
+
+    // Ações de gestão local permitidas ao Elder
+    const elderAllowed: Parameters<typeof can>[1][] = [
+      'program:create',
+      'program:view',
+      'program:clone',
+      'program:update',
+      'program:delete',
+      'registration:approve',
+      'registration:reject',
+      'department:create',
+      'department:view',
+      'department:update',
+      'department:member:add',
+      'department:member:update',
+      'department:member:remove',
+      'function:create',
+      'function:update',
+      'manager:assign',
+      'member:create',
+      'member:list',
+      'profile:view:other',
+      'assignment:create',
+      'assignment:delete',
+      'assignment:view:all',
+      'assignment:view:department',
+      'schedule:approve',
+    ];
+    for (const act of elderAllowed) {
+      expect(can(elder, act, { churchId: 'c-1' })).toBe(true);
+    }
+
+    // Ações próprias do Elder: permitidas sem targetUserId ou com o próprio ID; negadas com ID de outro
+    const ownActions: Parameters<typeof can>[1][] = [
+      'profile:view:own',
+      'profile:update:own',
+      'profile:export:own',
+      'availability:manage:own',
+      'assignment:confirm:own',
+      'assignment:decline:own',
+      'assignment:view:own',
+    ];
+    for (const act of ownActions) {
+      expect(can(elder, act)).toBe(true);
+      expect(can(elder, act, { targetUserId: elder.id })).toBe(true);
+      expect(can(elder, act, { targetUserId: 'outro-id' })).toBe(false);
+    }
+  });
+
+  it('valida isManagerOf e isManagerOfAny (departmentIds) para GESTOR e VOLUNTÁRIO em todos os cases do switch', () => {
+    const multiDeptActions: Parameters<typeof can>[1][] = [
+      'profile:view:other',
+      'profile:update:other',
+      'registration:approve',
+      'registration:reject',
+      'program:create',
+      'program:update',
+      'program:delete',
+      'program:clone',
+      'assignment:create',
+      'assignment:delete',
+      'assignment:view:department',
+      'schedule:approve',
+    ];
+
+    for (const act of multiDeptActions) {
+      // Sem departmentId nem departmentIds -> false
+      expect(can(managerA, act, {})).toBe(false);
+      // Com departmentIds vazio -> false
+      expect(can(managerA, act, { departmentIds: [] })).toBe(false);
+      // Com departmentIds contendo apenas dept onde NÃO é gestor -> false
+      expect(can(managerA, act, { departmentIds: ['dept-b', 'dept-c'] })).toBe(false);
+      // Com departmentIds contendo dept-a (onde é gestor) -> true
+      expect(can(managerA, act, { departmentIds: ['dept-b', 'dept-a'] })).toBe(true);
+      // Com departmentId onde é gestor -> true
+      expect(can(managerA, act, { departmentId: 'dept-a' })).toBe(true);
+      // Com departmentId onde NÃO é gestor -> false
+      expect(can(managerA, act, { departmentId: 'dept-b' })).toBe(false);
+    }
+
+    // profile:update:other para GESTOR com qualquer newRole (mesmo USER) deve ser bloqueado
+    expect(can(managerA, 'profile:update:other', { departmentId: 'dept-a', newRole: 'USER' })).toBe(false);
+
+    // Ações de departamento único sem departmentId -> false
+    const singleDeptActions: Parameters<typeof can>[1][] = [
+      'department:update',
+      'department:member:add',
+      'department:member:update',
+      'department:member:remove',
+      'member:create',
+      'function:create',
+      'function:update',
+    ];
+    for (const act of singleDeptActions) {
+      expect(can(managerA, act, {})).toBe(false);
+      expect(can(managerA, act, { departmentId: 'dept-a' })).toBe(true);
+      expect(can(managerA, act, { departmentId: 'dept-b' })).toBe(false);
+    }
+
+    // Ações próprias sem targetUserId para USER -> true
+    expect(can(volunteer, 'profile:view:own')).toBe(true);
+    expect(can(volunteer, 'assignment:confirm:own')).toBe(true);
+
+    // Sem objeto resource (resource = undefined) para todas as ações multi-dept e single-dept deve retornar false sem lançar erro
+    for (const act of multiDeptActions) {
+      expect(can(managerA, act)).toBe(false);
+    }
+    for (const act of singleDeptActions) {
+      expect(can(managerA, act)).toBe(false);
+    }
+
+    // PASTOR e ELDER sem resource em member:import e member:export -> false
+    expect(can(pastorComIgrejas, 'member:import')).toBe(false);
+    expect(can(pastorComIgrejas, 'member:export')).toBe(false);
+    expect(can(elder, 'member:import')).toBe(false);
+    expect(can(elder, 'member:export')).toBe(false);
   });
 });
