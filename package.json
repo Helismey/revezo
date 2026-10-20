@@ -30,7 +30,7 @@
     "cap:open:ios": "pnpm --filter @revezo/web cap:open:ios"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.13.10",
     "turbo": "^2.11.9",
