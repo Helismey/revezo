@@ -33,7 +33,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.13.10",
-    "turbo": "^2.11.6",
+    "turbo": "^2.11.9",
     "typescript": "^5.8.2",
     "fast-check": "^4.10.2",
     "vitest": "^5.0.2"
