@@ -53,6 +53,18 @@ interface MemberProfileData {
 
 type TabKey = 'pessoal' | 'contato' | 'endereco' | 'seguranca' | 'privacidade';
 
+function getSafeHttpsImageUrl(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:') return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 export function PerfilClient({ initialData }: { initialData: MemberProfileData }) {
   const [activeTab, setActiveTab] = useState<TabKey>('pessoal');
 
@@ -131,6 +143,7 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'sucesso' | 'erro'; text: string } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const safePhotoSrc = getSafeHttpsImageUrl(photoUrl);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,10 +417,10 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
       <div className="bg-surface rounded-surface border border-line p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
           <div className="relative w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center font-display font-bold text-2xl overflow-hidden border-2 border-line">
-            {photoUrl ? (
+            {safePhotoSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={photoUrl}
+                src={safePhotoSrc}
                 alt={name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
