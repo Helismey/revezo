@@ -44,6 +44,7 @@ const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
 };
 
 import { ChurchSelector } from './ChurchSelector';
+import { Logo } from './Logo';
 
 interface NavbarProps {
   churchName: string;
@@ -102,9 +103,10 @@ export function Navbar({
       <header className="sticky top-0 z-40 bg-surface border-b border-line shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-control bg-primary flex items-center justify-center text-white font-bold font-display text-lg shrink-0">
-              {churchName.charAt(0)}
-            </div>
+            <Link href="/" className="flex items-center shrink-0" title="Revezo — Início">
+              <Logo type="icon" variant="light" className="h-8 w-auto hover:opacity-85 transition-opacity" />
+            </Link>
+            <div className="h-6 w-px bg-line hidden sm:block" />
             <div>
               <ChurchSelector
                 currentChurch={currentChurch || { id: '', name: churchName, slug: '' }}
@@ -186,6 +188,12 @@ export function Navbar({
             </div>
           </div>
         )}
+        <div className="mt-auto pt-6 border-t border-line/60 flex items-center justify-between px-3 text-ink-muted">
+          <Link href="/" className="inline-flex items-center hover:opacity-80 transition-opacity">
+            <Logo type="full" variant="light" className="h-5 w-auto" />
+          </Link>
+          <span className="text-[10px] text-ink-muted font-mono">v0.1</span>
+        </div>
       </aside>
     </>
   );

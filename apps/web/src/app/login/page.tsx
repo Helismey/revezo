@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
+import { Logo } from '@/components/Logo';
 import { isCapacitorNative, setSecureToken } from '@/lib/capacitor-adapter';
 
 export default function LoginPage() {
@@ -71,9 +72,7 @@ export default function LoginPage() {
     <div className="min-h-[80vh] flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-primary text-white font-display font-bold text-2xl rounded-control flex items-center justify-center mx-auto mb-4">
-            R
-          </div>
+          <Logo type="icon" variant="light" className="h-14 w-auto mx-auto mb-4" />
           <h1 className="font-display font-bold text-2xl text-ink">Entrar no Revezo</h1>
           <p className="text-sm text-ink-muted mt-1">Acesse suas escalas e compromissos</p>
         </div>

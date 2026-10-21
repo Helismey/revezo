@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Phone, X } from '@/components/Icons';
+import { Logo } from '@/components/Logo';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -49,7 +50,7 @@ export function InstallPwaBanner() {
     return (
       <div className="bg-primary/5 border border-primary/20 rounded-surface p-3 sm:p-4 mb-4 flex items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2.5">
-          <Phone size={24} className="text-primary flex-shrink-0" />
+          <Logo type="icon" variant="light" className="h-7 w-auto flex-shrink-0" />
           <div>
             <p className="font-semibold text-ink">Instalar aplicativo</p>
             <p className="text-xs text-ink-muted">Acesse suas escalas mais rápido direto da sua tela inicial.</p>

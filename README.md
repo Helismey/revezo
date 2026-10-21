@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/design/referencias/logo.png" alt="Revezo" width="96" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/logo-dark.png" />
+    <img src="apps/web/public/logo.png" alt="Revezo — Sistema de Escalas para Igrejas" width="280" />
+  </picture>
 </p>
 
 <h1 align="center">Revezo</h1>

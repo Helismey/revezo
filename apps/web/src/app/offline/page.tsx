@@ -3,11 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { WifiSlash } from '@/components/Icons';
+import { Logo } from '@/components/Logo';
 
 export default function OfflinePage() {
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full bg-surface border border-line rounded-surface p-6 sm:p-8 text-center shadow-sm">
+        <Logo type="full" variant="light" className="h-7 w-auto mx-auto mb-6" />
         <div className="w-16 h-16 bg-warning-soft text-warning rounded-full flex items-center justify-center mx-auto mb-4">
           <WifiSlash size={32} className="text-warning-ink" />
         </div>

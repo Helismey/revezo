@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
+import { Logo } from '@/components/Logo';
 import { Check } from '@/components/Icons';
 export default function RegisterPage() {
   const [churches, setChurches] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -159,6 +160,7 @@ export default function RegisterPage() {
     <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6">
       <div className="bg-surface p-6 sm:p-8 rounded-surface border border-line shadow-sm">
         <div className="text-center mb-8">
+          <Logo type="icon" variant="light" className="h-12 w-auto mx-auto mb-3" />
           <h1 className="font-display font-bold text-2xl text-ink">Cadastro de Voluntário</h1>
           <p className="text-sm text-ink-muted mt-1">Preencha seus dados para servir nos departamentos</p>
         </div>
