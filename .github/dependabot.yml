@@ -41,6 +41,7 @@ updates:
           - "typescript"
           - "@types/node"
           - "tsx"
+          - "vite"
           - "vitest"
           - "@vitest/*"
     ignore:

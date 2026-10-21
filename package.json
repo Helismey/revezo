@@ -36,6 +36,7 @@
     "turbo": "^2.11.9",
     "typescript": "^5.8.2",
     "fast-check": "^4.10.2",
+    "vite": "^8.3.3",
     "vitest": "^5.0.2"
   },
   "pnpm": {
@@ -44,7 +45,8 @@
       "postcss-selector-parser": "^7.1.6",
       "deepmerge-ts": "^8.0.0",
       "qs": "^6.16.0",
-      "uuid": "^14.0.2"
+      "uuid": "^14.0.2",
+      "vite": "^8.3.3"
     },
     "auditConfig": {
       "ignoreGhsas": [
