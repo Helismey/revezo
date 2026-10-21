@@ -607,7 +607,7 @@ export function EscalasClient({
                                 <button
                                   type="button"
                                   onClick={() => setPendingRemoveAssignmentId(asg.id)}
-                                  className="text-xs text-ink-muted hover:text-danger font-semibold p-1.5 min-h-touch min-w-touch flex items-center justify-center rounded-control transition-colors"
+                                  aria-label="Remover" className="text-xs text-ink-muted hover:text-danger font-semibold p-1.5 min-h-touch min-w-touch flex items-center justify-center rounded-control transition-colors"
                                   title="Remover da escala"
                                 >
                                   <Trash size={15} />

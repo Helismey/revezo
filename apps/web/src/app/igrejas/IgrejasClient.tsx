@@ -493,7 +493,7 @@ export function IgrejasClient({
 
               <button
                 onClick={() => setShowModal(false)}
-                className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
+                aria-label="Fechar" className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
                 <X size={18} />
               </button>

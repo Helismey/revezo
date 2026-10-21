@@ -845,7 +845,7 @@ export function MembrosClient({
                   setShowCreateModal(false);
                   resetCreateForm();
                 }}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
+                aria-label="Fechar" className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
                 <X size={18} />
               </button>
@@ -1075,7 +1075,7 @@ export function MembrosClient({
               <button
                 type="button"
                 onClick={closeImportModal}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
+                aria-label="Fechar" className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
                 <X size={18} />
               </button>
@@ -1345,7 +1345,7 @@ export function MembrosClient({
               <button
                 type="button"
                 onClick={() => setEditingMember(null)}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
+                aria-label="Fechar" className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
                 <X size={18} />
               </button>
