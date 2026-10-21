@@ -446,7 +446,7 @@ export default function AuditoriaClient({
               </div>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-ink-muted hover:text-ink transition-colors p-1"
+                aria-label="Fechar" className="text-ink-muted hover:text-ink transition-colors p-1"
               >
                 <X size={18} />
               </button>

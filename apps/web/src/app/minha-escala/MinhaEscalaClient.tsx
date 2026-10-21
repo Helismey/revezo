@@ -279,7 +279,7 @@ export function MinhaEscalaClient({
                 <button
                   type="button"
                   onClick={() => setDeclineTarget(null)}
-                  className="text-ink-muted hover:text-ink p-1 rounded-control"
+                  aria-label="Fechar" className="text-ink-muted hover:text-ink p-1 rounded-control"
                 >
                   <X size={20} />
                 </button>
