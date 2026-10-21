@@ -1,6 +1,6 @@
 ---
 name: testes-integracao-banco
-description: Use ao escrever testes de integração com PostgreSQL real: transações, consultas por escopo, migrations, cron e Server Actions.
+description: "Use ao escrever testes de integração com PostgreSQL real: transações, consultas por escopo, migrations, cron e Server Actions."
 ---
 
 # Integração com banco

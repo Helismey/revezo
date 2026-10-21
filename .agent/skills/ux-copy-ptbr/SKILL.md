@@ -1,6 +1,6 @@
 ---
 name: ux-copy-ptbr
-description: Use ao escrever ou revisar textos de interface em português: botões, erros, estados vazios, confirmações, mensagens de lembrete.
+description: "Use ao escrever ou revisar textos de interface em português: botões, erros, estados vazios, confirmações, mensagens de lembrete."
 ---
 
 # UX copy em pt-BR

@@ -1,6 +1,6 @@
 ---
 name: seguranca-mobile-capacitor
-description: Use ao empacotar o app com Capacitor ou construir cliente mobile: armazenamento seguro, deep links, cache offline, lojas.
+description: "Use ao empacotar o app com Capacitor ou construir cliente mobile: armazenamento seguro, deep links, cache offline, lojas."
 ---
 
 # Segurança mobile

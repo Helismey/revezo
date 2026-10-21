@@ -1,6 +1,6 @@
 ---
 name: checklist-de-deploy
-description: Use antes de publicar uma versão: verificação pré-deploy, deploy, pós-deploy e gatilhos de rollback.
+description: "Use antes de publicar uma versão: verificação pré-deploy, deploy, pós-deploy e gatilhos de rollback."
 ---
 
 # Checklist de deploy

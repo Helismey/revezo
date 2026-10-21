@@ -1,6 +1,6 @@
 ---
 name: revisao-de-codigo
-description: Use para revisar mudanças antes de merge: segurança, desempenho, correção e manutenibilidade.
+description: "Use para revisar mudanças antes de merge: segurança, desempenho, correção e manutenibilidade."
 ---
 
 # Revisão de código

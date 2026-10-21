@@ -1,6 +1,6 @@
 ---
 name: design-system-igreja
-description: Use ao criar componentes, telas ou tema visual: tokens, cores e logo configuráveis, estados, acessibilidade.
+description: "Use ao criar componentes, telas ou tema visual: tokens, cores e logo configuráveis, estados, acessibilidade."
 ---
 
 # Design system da igreja

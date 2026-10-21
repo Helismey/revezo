@@ -1,6 +1,6 @@
 ---
 name: testes-desempenho
-description: Use para testes de desempenho: geração de escala, telas principais, consultas por tela e regressão de N+1.
+description: "Use para testes de desempenho: geração de escala, telas principais, consultas por tela e regressão de N+1."
 ---
 
 # Desempenho

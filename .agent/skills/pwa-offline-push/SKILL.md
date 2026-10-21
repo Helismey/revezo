@@ -1,6 +1,6 @@
 ---
 name: pwa-offline-push
-description: Use ao configurar PWA: manifest, service worker, cache offline da própria escala e Web Push.
+description: "Use ao configurar PWA: manifest, service worker, cache offline da própria escala e Web Push."
 ---
 
 # PWA, offline e push
