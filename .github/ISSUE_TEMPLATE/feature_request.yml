@@ -1,0 +1,52 @@
+name: Sugestão de Funcionalidade
+description: Sugira uma nova ideia ou melhoria para o Revezo
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a tornar o **Revezo** ainda melhor!
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema essa ideia visa resolver?
+      description: Uma descrição clara de qual é a dor ou necessidade no dia a dia da igreja ou do departamento.
+      placeholder: Temos dificuldade quando...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Qual a solução sugerida?
+      description: Como você imagina essa funcionalidade funcionando no sistema?
+      placeholder: Seria ótimo se o sistema permitisse...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Você já tentou alguma alternativa ou contorno para esse problema?
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo ou Área relacionada
+      options:
+        - Escalas e Bloqueio de Conflitos
+        - Notificações (WhatsApp / E-mail / Push)
+        - Trocas e Substituição Automática
+        - Disponibilidade dos Membros
+        - Painel do Gestor / Histórico
+        - Tema e Customização da Igreja
+        - Aplicativo Mobile / PWA
+        - Outro
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verificações
+      options:
+        - label: Eu pesquisei nas issues para garantir que esta sugestão não é duplicada.
+          required: true
+        - label: A sugestão prioriza a simplicidade de uso no celular para voluntários e gestores.
+          required: true

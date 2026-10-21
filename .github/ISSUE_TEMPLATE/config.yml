@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🛡️ Relatar Vulnerabilidade de Segurança
+    url: https://github.com/Helismey/escala-igreja/security/advisories/new
+    about: Se você identificou uma vulnerabilidade de segurança ou risco de vazamento de dados, por favor relate de forma confidencial.
+  - name: 📖 Documentação e Arquitetura do Projeto
+    url: https://github.com/Helismey/escala-igreja/tree/main/docs
+    about: Consulte requisitos, decisões de arquitetura (ADRs) e regras do sistema.

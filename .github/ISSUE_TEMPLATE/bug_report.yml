@@ -1,0 +1,67 @@
+name: Relato de Bug
+description: Crie um relatório para nos ajudar a identificar e corrigir um erro
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por dedicar seu tempo a relatar este problema no **Revezo**!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o problema que você enfrentou de forma clara e objetiva.
+      placeholder: Explique o que deu errado...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir o problema
+      description: Como podemos reproduzir esse comportamento?
+      placeholder: |
+        1. Acesse '...'
+        2. Clique em '....'
+        3. Veja o erro ocorrido
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+      description: O que deveria ter acontecido normalmente?
+    validations:
+      required: true
+  - type: dropdown
+    id: context
+    attributes:
+      label: Onde o problema ocorreu?
+      options:
+        - Navegador no Celular (Mobile Web / PWA)
+        - Navegador no Computador (Desktop Web)
+        - Aplicativo Mobile (Capacitor / Android / iOS)
+        - Terminal / Scripts / API
+        - Outro
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Informações de Ambiente
+      description: Versão do navegador, modelo do dispositivo ou sistema operacional.
+      placeholder: Ex: Chrome Mobile no Android 14 / Safari no iPhone 13 / Edge no Windows 11
+  - type: textarea
+    id: logs-screenshots
+    attributes:
+      label: Logs ou Capturas de Tela
+      description: Cole prints ou logs de erro se disponíveis (atenção: nunca exponha dados pessoais reais de membros).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verificações
+      options:
+        - label: Eu pesquisei nas issues abertas e este problema ainda não foi relatado.
+          required: true
+        - label: Este relato não contém dados pessoais reais de membros nem senhas/chaves secretas.
+          required: true
