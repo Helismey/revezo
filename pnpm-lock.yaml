@@ -154,6 +154,9 @@ importers:
         specifier: workspace:*
         version: link:../domain
     devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
       prisma:
         specifier: ^6.4.1
         version: 6.19.3(typescript@7.0.2)
