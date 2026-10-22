@@ -141,9 +141,14 @@ export default async function DashboardPage() {
             ...(activeChurchId ? { program: { churchId: activeChurchId } } : {}),
             ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
           },
-          include: {
-            assignments: {
-              where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+          select: {
+            requiredCount: true,
+            _count: {
+              select: {
+                assignments: {
+                  where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+                },
+              },
             },
           },
         }),
@@ -159,7 +164,7 @@ export default async function DashboardPage() {
       pendingApprovalsCount = approvalsCount;
       totalActiveMembers = membersCount;
       upcomingProgramsCount = programsCount;
-      openSlotsCount = futureSlots.filter((s) => s.assignments.length < s.requiredCount).length;
+      openSlotsCount = futureSlots.filter((s) => s._count.assignments < s.requiredCount).length;
       pendingSwapsCount = swapsCount;
     }
   } catch {
