@@ -40,7 +40,8 @@ export function AlertBanner({ type, title, message, className = '' }: AlertBanne
 
   return (
     <div
-      role="alert"
+      role={type === 'erro' ? 'alert' : 'status'}
+      aria-live={type === 'erro' ? 'assertive' : 'polite'}
       className={`p-3.5 rounded-control ${containerClasses} ${borderClasses} ${className} flex items-start space-x-3`}
     >
       <div className="flex-1 text-sm">
