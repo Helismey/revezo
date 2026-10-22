@@ -118,9 +118,14 @@ export default async function RootLayout({
                 ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
                 ...(currentChurch?.id ? { program: { churchId: currentChurch.id } } : {}),
               },
-              include: {
-                assignments: {
-                  where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+              select: {
+                requiredCount: true,
+                _count: {
+                  select: {
+                    assignments: {
+                      where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+                    },
+                  },
                 },
               },
             })
@@ -135,7 +140,7 @@ export default async function RootLayout({
 
       badgeCounts.pendingApprovals = pendingApprovals;
       badgeCounts.openSlots = futureSlots.filter(
-        (s) => s.assignments.length < s.requiredCount
+        (s) => s._count.assignments < s.requiredCount
       ).length;
       badgeCounts.unconfirmed = unconfirmed;
     } catch {
