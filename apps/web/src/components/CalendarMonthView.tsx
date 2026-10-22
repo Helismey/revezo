@@ -35,7 +35,9 @@ const MONTH_NAMES = [
 
 const WEEKDAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-export function CalendarMonthView({
+// ⚡ Bolt Optimization: Added React.memo to prevent unnecessary re-renders of the complex calendar grid.
+// This is especially beneficial when parent components (like MinhaEscalaClient) re-render for unrelated state changes.
+export const CalendarMonthView = React.memo(function CalendarMonthView({
   events,
   departments,
   selectedDepartmentId = '',
@@ -443,4 +445,4 @@ export function CalendarMonthView({
       )}
     </div>
   );
-}
+});
