@@ -114,7 +114,7 @@ export function SchedulePrintModal({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-2 bg-primary text-white rounded-control text-xs sm:text-sm font-semibold hover:bg-primary-dark transition-all flex items-center gap-1.5 shadow-subtle min-h-touch"
+              className="px-4 py-2 bg-primary text-white rounded-control text-xs sm:text-sm font-semibold hover:bg-primary-dark transition-all flex items-center gap-1.5 shadow-subtle min-h-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               <Printer size={16} weight="bold" />
               Imprimir Mural A4
@@ -122,10 +122,11 @@ export function SchedulePrintModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-ink-muted hover:text-ink rounded-control hover:bg-line/40 transition-colors"
+              className="p-2 text-ink-muted hover:text-ink rounded-control hover:bg-line/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title="Fechar"
+              aria-label="Fechar modal de impressão"
             >
-              <X size={20} />
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -133,12 +134,17 @@ export function SchedulePrintModal({
         {/* Filtros de Impressão na tela (Oculta na impressão) */}
         <div className="p-4 bg-surface border-b border-line grid grid-cols-1 sm:grid-cols-2 gap-3 no-print text-xs">
           <div>
-            <label className="font-semibold text-ink block mb-1">Escopo de impressão:</label>
-            <div className="flex items-center gap-2">
+            <label id="print-scope-label" className="font-semibold text-ink block mb-1">Escopo de impressão:</label>
+            <div
+              className="flex items-center gap-2"
+              role="group"
+              aria-labelledby="print-scope-label"
+            >
               <button
                 type="button"
                 onClick={() => setScope('current')}
-                className={`flex-1 py-1.5 px-3 rounded-control border text-center font-medium transition-all ${
+                aria-pressed={scope === 'current'}
+                className={`flex-1 py-1.5 px-3 rounded-control border text-center font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   scope === 'current'
                     ? 'border-primary bg-primary/10 text-primary font-bold'
                     : 'border-line text-ink-muted hover:text-ink'
@@ -149,7 +155,8 @@ export function SchedulePrintModal({
               <button
                 type="button"
                 onClick={() => setScope('all')}
-                className={`flex-1 py-1.5 px-3 rounded-control border text-center font-medium transition-all ${
+                aria-pressed={scope === 'all'}
+                className={`flex-1 py-1.5 px-3 rounded-control border text-center font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   scope === 'all'
                     ? 'border-primary bg-primary/10 text-primary font-bold'
                     : 'border-line text-ink-muted hover:text-ink'
