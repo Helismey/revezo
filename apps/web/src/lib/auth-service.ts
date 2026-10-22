@@ -30,6 +30,10 @@ import QRCode from 'qrcode';
 
 const SESSION_COOKIE_NAME = 'revezo_sess';
 
+// Hash seguro fictício usado para equalizar o tempo de resposta e evitar
+// enumeração de usuários (timing attack) na rota de login e recuperação.
+const DUMMY_PASSWORD_HASH = 'scrypt:dfa36f1989ff2dc1a16f085c7efe3729:e20d93a587dfd72822455f37ba2d5fe49b3d56ad40fbe295bd5039b6e7d53272c8636ee0f538931c879ffd2cf1ad6d964803f90517984bd0971fbbd2207e71f6';
+
 export function resolveSessionSecret(
   envSecret = process.env.AUTH_SECRET,
   nodeEnv = process.env.NODE_ENV
@@ -580,6 +584,10 @@ export async function authenticateUser(email: string, password: string, totpCode
   const INVALID_CREDENTIALS_MSG = 'E-mail ou senha incorretos.';
 
   if (!user) {
+    // Executa a verificação de senha contra um hash fictício para igualar o
+    // tempo de processamento, mitigando ataques de timing para enumerar usuários.
+    verifyPassword(password, DUMMY_PASSWORD_HASH);
+
     await loginRateLimiter.recordAttempt(rateLimitKey);
     await prisma.auditLog.create({
       data: {
@@ -594,6 +602,9 @@ export async function authenticateUser(email: string, password: string, totpCode
 
   // 2.1 Bloqueio temporário por conta (Regra 10: limitar tentativas por IP e por conta)
   if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    // Mantém o custo de CPU igual verificando com o hash fictício
+    verifyPassword(password, DUMMY_PASSWORD_HASH);
+
     const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
     await prisma.auditLog.create({
       data: {
