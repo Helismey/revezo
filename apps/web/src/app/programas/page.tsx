@@ -31,7 +31,11 @@ export default async function ProgramasPage() {
       departments: {
         include: { department: true },
       },
-      slots: true,
+      // ⚡ Bolt Optimization: Use Prisma's _count to offload aggregation to the DB
+      // instead of fetching full relation arrays just to count the length in JS.
+      _count: {
+        select: { slots: true }
+      }
     },
     orderBy: {
       date: 'asc',
@@ -63,7 +67,7 @@ export default async function ProgramasPage() {
         id: d.department.id,
         name: d.department.name,
       })),
-      slotsCount: p.slots.length,
+      slotsCount: p._count.slots,
       createdByRole: p.createdByRole,
       isCreatedBySuperior,
     };
