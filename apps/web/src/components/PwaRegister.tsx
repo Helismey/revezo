@@ -17,6 +17,24 @@ export function PwaRegister() {
       return;
     }
 
+    // Em ambiente de desenvolvimento, desregistra qualquer Service Worker ativo
+    // e limpa os caches antigos para evitar conflitos com o Webpack HMR e chunks do Next.js
+    if (process.env.NODE_ENV === 'development') {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          for (const key of keys) {
+            caches.delete(key);
+          }
+        });
+      }
+      return;
+    }
+
     const registerWorker = () => {
       navigator.serviceWorker
         .register('/sw.js')

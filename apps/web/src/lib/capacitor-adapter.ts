@@ -1,7 +1,3 @@
-import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
-import { App } from '@capacitor/app';
-
 const TOKEN_KEY = 'revezo_auth_token';
 
 /**
@@ -9,7 +5,9 @@ const TOKEN_KEY = 'revezo_auth_token';
  */
 export const isCapacitorNative = (): boolean => {
   try {
-    return typeof Capacitor?.isNativePlatform === 'function' && Capacitor.isNativePlatform();
+    if (typeof window === 'undefined') return false;
+    const win = window as any;
+    return Boolean(typeof win.Capacitor !== 'undefined' && typeof win.Capacitor.isNativePlatform === 'function' && win.Capacitor.isNativePlatform());
   } catch {
     return false;
   }
@@ -19,7 +17,9 @@ export const isCapacitorNative = (): boolean => {
  * Recupera o token de sessão do KeyStore (Android) / Keychain (iOS) com segurança (Rule 17)
  */
 export const getSecureToken = async (): Promise<string | null> => {
+  if (!isCapacitorNative()) return null;
   try {
+    const { Preferences } = await import('@capacitor/preferences');
     const { value } = await Preferences.get({ key: TOKEN_KEY });
     return value;
   } catch {
@@ -31,14 +31,26 @@ export const getSecureToken = async (): Promise<string | null> => {
  * Armazena o token de sessão no KeyStore/Keychain nativo criptografado pelo SO
  */
 export const setSecureToken = async (token: string): Promise<void> => {
-  await Preferences.set({ key: TOKEN_KEY, value: token });
+  if (!isCapacitorNative()) return;
+  try {
+    const { Preferences } = await import('@capacitor/preferences');
+    await Preferences.set({ key: TOKEN_KEY, value: token });
+  } catch {
+    // Ignora se não for suportado
+  }
 };
 
 /**
  * Remove o token seguro ao efetuar logout
  */
 export const removeSecureToken = async (): Promise<void> => {
-  await Preferences.remove({ key: TOKEN_KEY });
+  if (!isCapacitorNative()) return;
+  try {
+    const { Preferences } = await import('@capacitor/preferences');
+    await Preferences.remove({ key: TOKEN_KEY });
+  } catch {
+    // Ignora
+  }
 };
 
 /**
@@ -49,28 +61,36 @@ export const setupCapacitorListeners = (onNavigate?: (path: string) => void): ((
     return () => {};
   }
 
-  const backHandler = App.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
-    if (canGoBack && typeof window !== 'undefined') {
-      window.history.back();
-    } else {
-      App.exitApp();
-    }
-  });
+  let cleanupFn = () => {};
 
-  const urlHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
-    try {
-      // Exemplo: revezo://confirmar/token123 -> /confirmar/token123
-      const path = event.url.replace(/^revezo:\/\/?/, '/');
-      if (onNavigate && path) {
-        onNavigate(path);
+  import('@capacitor/app').then(({ App }) => {
+    const backHandler = App.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
+      if (canGoBack && typeof window !== 'undefined') {
+        window.history.back();
+      } else {
+        App.exitApp();
       }
-    } catch (err) {
-      console.warn('[Capacitor] Erro ao processar deep link:', err);
-    }
-  });
+    });
+
+    const urlHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
+      try {
+        // Exemplo: revezo://confirmar/token123 -> /confirmar/token123
+        const path = event.url.replace(/^revezo:\/\/?/, '/');
+        if (onNavigate && path) {
+          onNavigate(path);
+        }
+      } catch (err) {
+        console.warn('[Capacitor] Erro ao processar deep link:', err);
+      }
+    });
+
+    cleanupFn = () => {
+      backHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
+      urlHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
+    };
+  }).catch(() => {});
 
   return () => {
-    backHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
-    urlHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
+    cleanupFn();
   };
 };
