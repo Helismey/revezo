@@ -2898,18 +2898,16 @@ export async function getDepartmentParticipationReport(params: {
   const toDate = to ? new Date(to) : new Date();
 
   // 1. Busca departamentos no escopo
+  // ⚡ Bolt: Optimized query by selecting only 'id' and 'name' instead of over-fetching
+  // related functions and members. This significantly reduces memory usage and DB load.
   const departments = await prisma.department.findMany({
     where: {
       ...(departmentId ? { id: departmentId } : {}),
       ...(churchId ? { churchId } : {}),
     },
-    include: {
-      functions: true,
-      members: {
-        include: {
-          user: true,
-        },
-      },
+    select: {
+      id: true,
+      name: true,
     },
   });
 
