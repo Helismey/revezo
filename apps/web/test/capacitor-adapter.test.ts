@@ -43,10 +43,13 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
 
   it('detecta ambiente mobile nativo quando executando no Capacitor', () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (global as any).window = { Capacitor };
     expect(isCapacitorNative()).toBe(true);
   });
 
   it('grava token de sessão no KeyStore/SharedPreferences nativos com segurança', async () => {
+    (global as any).window = { Capacitor };
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     await setSecureToken('token-jwt-assinado-123');
     expect(Preferences.set).toHaveBeenCalledWith({
       key: 'revezo_auth_token',
@@ -55,6 +58,8 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
   });
 
   it('recupera token de sessão do armazenamento seguro', async () => {
+    (global as any).window = { Capacitor };
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Preferences.get).mockResolvedValueOnce({ value: 'token-armazenado' });
     const token = await getSecureToken();
     expect(token).toBe('token-armazenado');
@@ -62,11 +67,14 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
   });
 
   it('remove token seguro ao efetuar logout', async () => {
+    (global as any).window = { Capacitor };
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     await removeSecureToken();
     expect(Preferences.remove).toHaveBeenCalledWith({ key: 'revezo_auth_token' });
   });
 
   it('configura listeners de deep link e botão voltar nativo quando em plataforma nativa', async () => {
+    (global as any).window = { Capacitor };
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
 
     const removeBack = vi.fn();
@@ -78,6 +86,8 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
     });
 
     const cleanup = setupCapacitorListeners();
+
+    await new Promise((resolve) => setTimeout(resolve, 0)); // wait for dynamic import
 
     expect(App.addListener).toHaveBeenCalledWith('backButton', expect.any(Function));
     expect(App.addListener).toHaveBeenCalledWith('appUrlOpen', expect.any(Function));
