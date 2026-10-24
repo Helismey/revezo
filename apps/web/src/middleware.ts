@@ -107,7 +107,16 @@ export function middleware(request: NextRequest) {
   const isWebhookOrCron = pathname.startsWith('/api/webhooks') || pathname.startsWith('/api/cron');
   if (pathname.startsWith('/api/') && MUTATING_METHODS.has(request.method) && !isWebhookOrCron) {
     const referer = request.headers.get('referer');
+    const customHeader = request.headers.get('x-requested-with');
     const sourceToVerify = origin || referer;
+
+    if (!sourceToVerify && !customHeader) {
+      return NextResponse.json(
+        { success: false, error: 'Origem não autorizada (proteção CSRF/CORS).' },
+        { status: 403 }
+      );
+    }
+
     if (sourceToVerify && !isAllowedOrigin(sourceToVerify, host)) {
       return NextResponse.json(
         { success: false, error: 'Origem não autorizada (proteção CSRF/CORS).' },
