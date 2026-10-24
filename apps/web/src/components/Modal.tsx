@@ -126,6 +126,7 @@ export function ConfirmDialog({
   loading = false,
 }: ConfirmDialogProps) {
   const [inputValue, setInputValue] = React.useState('');
+  const inputId = React.useId();
 
   useEffect(() => {
     if (isOpen) {
@@ -139,16 +140,17 @@ export function ConfirmDialog({
 
       {withInput && (
         <div>
-          <label className="block text-xs font-semibold text-ink-muted uppercase mb-1.5">
+          <label htmlFor={inputId} className="block text-xs font-semibold text-ink-muted uppercase mb-1.5">
             {inputLabel}
           </label>
           <input
+            id={inputId}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={inputPlaceholder}
             maxLength={300}
-            className="w-full px-3.5 py-2.5 bg-bg border border-line rounded-control text-sm text-ink focus:outline-none focus:border-primary min-h-touch"
+            className="w-full px-3.5 py-2.5 bg-bg border border-line rounded-control text-sm text-ink focus:outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 min-h-touch"
           />
         </div>
       )}
@@ -158,7 +160,7 @@ export function ConfirmDialog({
           type="button"
           onClick={onClose}
           disabled={loading}
-          className="px-4 py-2 border border-line text-ink-muted font-semibold text-sm rounded-control hover:text-ink min-h-touch disabled:opacity-50"
+          className="px-4 py-2 border border-line text-ink-muted font-semibold text-sm rounded-control hover:text-ink min-h-touch disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           {cancelLabel}
         </button>
@@ -166,8 +168,8 @@ export function ConfirmDialog({
           type="button"
           disabled={loading}
           onClick={() => onConfirm(withInput ? inputValue.trim() || undefined : undefined)}
-          className={`px-4 py-2 text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50 ${
-            variant === 'danger' ? 'bg-danger' : 'bg-primary'
+          className={`px-4 py-2 text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+            variant === 'danger' ? 'bg-danger focus-visible:ring-danger' : 'bg-primary focus-visible:ring-primary'
           }`}
         >
           {loading ? 'Processando...' : confirmLabel}
