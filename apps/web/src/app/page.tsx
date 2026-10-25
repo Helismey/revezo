@@ -52,7 +52,8 @@ export default async function DashboardPage() {
   let pendingSwapsCount = 0;
 
   try {
-    nextAssignment = await prisma.assignment.findFirst({
+    // ⚡ Bolt Optimization: Batched 2 API calls into a single query for both next and upcoming assignments
+    const allUpcomingAssignments = await prisma.assignment.findMany({
       where: {
         userId: session.userId,
         status: { in: ['PENDING', 'CONFIRMED'] },
@@ -74,33 +75,11 @@ export default async function DashboardPage() {
           startsAt: 'asc',
         },
       },
+      take: 6,
     });
 
-    upcomingAssignments = await prisma.assignment.findMany({
-      where: {
-        userId: session.userId,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        id: nextAssignment ? { not: nextAssignment.id } : undefined,
-        slot: {
-          startsAt: { gte: now },
-        },
-      },
-      include: {
-        slot: {
-          include: {
-            department: true,
-            function: true,
-            program: true,
-          },
-        },
-      },
-      orderBy: {
-        slot: {
-          startsAt: 'asc',
-        },
-      },
-      take: 5,
-    });
+    nextAssignment = allUpcomingAssignments.length > 0 ? allUpcomingAssignments[0] : null;
+    upcomingAssignments = allUpcomingAssignments.slice(1);
 
     if (canViewManagement) {
       const isFullChurchAdmin = isAdmin || isPastor || isElder;
