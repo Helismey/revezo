@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   isCapacitorNative,
   getSecureToken,
@@ -34,6 +34,15 @@ vi.mock('@capacitor/app', () => ({
 describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('window', {
+      Capacitor: {
+        isNativePlatform: Capacitor.isNativePlatform,
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('detecta ambiente web padrão quando não está em plataforma nativa', () => {
@@ -78,6 +87,9 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
     });
 
     const cleanup = setupCapacitorListeners();
+
+    // Since setupCapacitorListeners uses dynamic imports, wait for microtasks
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(App.addListener).toHaveBeenCalledWith('backButton', expect.any(Function));
     expect(App.addListener).toHaveBeenCalledWith('appUrlOpen', expect.any(Function));
