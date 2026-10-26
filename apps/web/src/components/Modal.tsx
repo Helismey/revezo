@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useId, useRef } from 'react';
-import { X } from './Icons';
+import { X, CircleNotch } from './Icons';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -168,10 +168,11 @@ export function ConfirmDialog({
           type="button"
           disabled={loading}
           onClick={() => onConfirm(withInput ? inputValue.trim() || undefined : undefined)}
-          className={`px-4 py-2 text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+          className={`px-4 py-2 text-white font-semibold text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 flex items-center justify-center gap-2 ${
             variant === 'danger' ? 'bg-danger focus-visible:ring-danger' : 'bg-primary focus-visible:ring-primary'
           }`}
         >
+          {loading && <CircleNotch size={16} className="animate-spin" />}
           {loading ? 'Processando...' : confirmLabel}
         </button>
       </div>

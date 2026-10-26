@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import { Logo } from '@/components/Logo';
+import { CircleNotch } from '@/components/Icons';
 import { isCapacitorNative, setSecureToken } from '@/lib/capacitor-adapter';
 
 function LoginForm() {
@@ -181,8 +182,9 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-primary text-on-primary font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch flex items-center justify-center text-base"
+            className="w-full py-3 px-4 bg-primary text-on-primary font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch flex items-center justify-center gap-2 text-base"
           >
+            {loading && <CircleNotch size={20} className="animate-spin" />}
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
