@@ -31,6 +31,8 @@ vi.mock('@capacitor/app', () => ({
   },
 }));
 
+beforeEach(() => { vi.stubGlobal('window', { Capacitor: Capacitor }); });
+
 describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,6 +80,8 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
     });
 
     const cleanup = setupCapacitorListeners();
+    // Allow dynamic import in the adapter to resolve
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(App.addListener).toHaveBeenCalledWith('backButton', expect.any(Function));
     expect(App.addListener).toHaveBeenCalledWith('appUrlOpen', expect.any(Function));
