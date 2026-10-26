@@ -63,16 +63,16 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 1. Contexto de congregação ativa e configurações visuais
-  const churchContext = await getActiveChurchContext();
+  // 1. Contexto de congregação ativa, sessão e contexto de autorização em paralelo
+  const [churchContext, session, userContext] = await Promise.all([
+    getActiveChurchContext(),
+    getSession(),
+    getCurrentUserContext(),
+  ]);
   const currentChurch = churchContext.church;
   const churchName = currentChurch?.name || 'Revezo';
   const primaryColor = currentChurch?.primaryColor || '#0F4C5C';
   const secondaryColor = currentChurch?.secondaryColor || '#F59E0B';
-
-  // 2. Contexto de usuário autenticado
-  const session = await getSession();
-  const userContext = await getCurrentUserContext();
 
   const authorizedItems = userContext ? getAuthorizedMenuItems(userContext) : [];
   const { bottomBar, moreSheet } = userContext ? getMobileNavigation(userContext) : { bottomBar: [], moreSheet: [] };

@@ -12,8 +12,15 @@ const FORBIDDEN_AUDIT_ACTIONS = new Set([
   'deleteMany',
 ]);
 
+const auditModelCache = new WeakMap<object, any>();
+
 function createProtectedAuditModel(modelDelegate: any) {
-  return new Proxy(modelDelegate, {
+  if (modelDelegate && typeof modelDelegate === 'object') {
+    const cached = auditModelCache.get(modelDelegate);
+    if (cached) return cached;
+  }
+
+  const proxy = new Proxy(modelDelegate, {
     get(target, prop, receiver) {
       if (typeof prop === 'string' && FORBIDDEN_AUDIT_ACTIONS.has(prop)) {
         return async () => {
@@ -25,6 +32,12 @@ function createProtectedAuditModel(modelDelegate: any) {
       return Reflect.get(target, prop, receiver);
     },
   });
+
+  if (modelDelegate && typeof modelDelegate === 'object') {
+    auditModelCache.set(modelDelegate, proxy);
+  }
+
+  return proxy;
 }
 
 function wrapClientWithAuditGuard<T extends object>(client: T): T {
@@ -64,4 +77,3 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 // Mantém o singleton em globalThis inclusive em lambdas serverless aquecidas (prevenindo exaustão de pool de conexões)
 globalForPrisma.prisma = prisma;
-

@@ -11,66 +11,68 @@ export default async function IgrejasPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
+  const [userContext, churchContext] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
   if (!userContext || !can(userContext, 'church:create')) {
     redirect('/');
   }
 
-  const churchContext = await getActiveChurchContext();
   const activeChurchId = churchContext.church?.id;
   const isMaster = userContext.globalRole === 'ADMIN_MASTER';
 
-  // Busca congregações
-  const churches = await prisma.church.findMany({
-    where: isMaster ? undefined : { id: { in: userContext.pastorChurchIds || [] } },
-    include: {
-      pastors: {
-        include: {
-          pastor: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+  // Busca congregações e lista de pastores disponíveis em paralelo
+  const [churches, pastors] = await Promise.all([
+    prisma.church.findMany({
+      where: isMaster ? undefined : { id: { in: userContext.pastorChurchIds || [] } },
+      include: {
+        pastors: {
+          include: {
+            pastor: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
             },
           },
         },
-      },
-      _count: {
-        select: {
-          users: true,
-          departments: true,
-          programs: true,
+        _count: {
+          select: {
+            users: true,
+            departments: true,
+            programs: true,
+          },
         },
-      },
-    },
-    orderBy: {
-      name: 'asc',
-    },
-  });
-
-  // Busca lista de pastores disponíveis se for ADMIN_MASTER
-  let availablePastors: PastorOption[] = [];
-  if (isMaster) {
-    const pastors = await prisma.user.findMany({
-      where: {
-        globalRole: 'PASTOR',
-        status: 'ACTIVE',
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
       },
       orderBy: {
         name: 'asc',
       },
-    });
-    availablePastors = pastors.map((p) => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-    }));
-  }
+    }),
+    isMaster
+      ? prisma.user.findMany({
+          where: {
+            globalRole: 'PASTOR',
+            status: 'ACTIVE',
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const availablePastors: PastorOption[] = pastors.map((p) => ({
+    id: p.id,
+    name: p.name,
+    email: p.email,
+  }));
 
   const serializedChurches: ChurchListItem[] = churches.map((c) => ({
     id: c.id,

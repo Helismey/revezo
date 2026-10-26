@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import { CalendarMonthView, CalendarEventItem } from '@/components/CalendarMonthView';
 import {
@@ -62,6 +63,7 @@ const WEEKDAY_OPTIONS = [
 ];
 
 export function ProgramasClient({ programs, departments, canManage, activeChurchId, churchName }: ProgramasClientProps) {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalTab, setCreateModalTab] = useState<'single' | 'recurrent'>('single');
@@ -263,7 +265,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
 
       setMessage({ type: 'sucesso', text: 'Programa criado com sucesso!' });
       setShowCreateModal(false);
-      window.location.reload();
+      router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha na requisição';
       setMessage({ type: 'erro', text: msg });
@@ -322,7 +324,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
         text: json.message || `${json.count} programas recorrentes criados com sucesso!`,
       });
       setShowCreateModal(false);
-      window.location.reload();
+      router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao processar recorrência';
       setMessage({ type: 'erro', text: msg });
@@ -358,7 +360,7 @@ export function ProgramasClient({ programs, departments, canManage, activeChurch
       setMessage({ type: 'sucesso', text: 'Programa clonado com sucesso para a nova data!' });
       setCloningProgramId(null);
       setCloneDate('');
-      window.location.reload();
+      router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao clonar programa';
       setMessage({ type: 'erro', text: msg });

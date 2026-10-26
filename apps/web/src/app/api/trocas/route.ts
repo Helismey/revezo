@@ -4,8 +4,10 @@ import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib
 
 export async function GET() {
   try {
-    const session = await getSession();
-    const userContext = await getCurrentUserContext();
+    const [session, userContext] = await Promise.all([
+      getSession(),
+      getCurrentUserContext(),
+    ]);
 
     if (!session || !userContext) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
@@ -13,82 +15,20 @@ export async function GET() {
 
     const userId = session.userId;
     const isAdmin = userContext.globalRole === 'ADMIN_MASTER';
+    const isPastor = userContext.globalRole === 'PASTOR';
+    const isElder = userContext.globalRole === 'ELDER';
     const managedDeptIds = userContext.departmentMemberships
       .filter((m) => m.role === 'MANAGER')
       .map((m) => m.departmentId);
 
+    const canApprove = isAdmin || isPastor || isElder || managedDeptIds.length > 0;
+
     // Departamentos aos quais o usuário pertence
     const myDeptIds = userContext.departmentMemberships.map((m) => m.departmentId);
 
-    // 1. Pedidos solicitados pelo próprio usuário
-    const solicitadas = await prisma.swapRequest.findMany({
-      where: { requesterId: userId },
-      include: {
-        assignment: {
-          include: {
-            slot: {
-              include: {
-                program: true,
-                department: true,
-                function: true,
-              },
-            },
-          },
-        },
-        targetUser: {
-          select: { id: true, name: true, photoUrl: true },
-        },
-        reviewedBy: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // 2. Pedidos recebidos direcionados ao usuário ou abertos para os departamentos dele
-    const recebidas = await prisma.swapRequest.findMany({
-      where: {
-        status: 'PENDING_TARGET',
-        requesterId: { not: userId },
-        OR: [
-          { targetUserId: userId },
-          {
-            targetUserId: null,
-            assignment: {
-              slot: {
-                departmentId: { in: myDeptIds },
-              },
-            },
-          },
-        ],
-      },
-      include: {
-        requester: {
-          select: { id: true, name: true, photoUrl: true },
-        },
-        assignment: {
-          include: {
-            slot: {
-              include: {
-                program: true,
-                department: true,
-                function: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // 3. Pedidos aguardando aprovação do gestor / ancião / pastor
-    let paraAprovacao: typeof solicitadas = [];
-    const isPastor = userContext.globalRole === 'PASTOR';
-    const isElder = userContext.globalRole === 'ELDER';
-
-    if (isAdmin || isPastor || isElder || managedDeptIds.length > 0) {
+    let churchFilter: any = {};
+    if (canApprove) {
       const { activeChurch } = await getActiveChurchContext();
-      let churchFilter: any = {};
 
       if (activeChurch) {
         if (
@@ -148,17 +88,51 @@ export async function GET() {
           };
         }
       }
+    }
 
-      paraAprovacao = await prisma.swapRequest.findMany({
+    // Executa todas as 3 consultas de listagem de trocas em paralelo
+    const [solicitadas, recebidas, paraAprovacao] = await Promise.all([
+      prisma.swapRequest.findMany({
+        where: { requesterId: userId },
+        include: {
+          assignment: {
+            include: {
+              slot: {
+                include: {
+                  program: true,
+                  department: true,
+                  function: true,
+                },
+              },
+            },
+          },
+          targetUser: {
+            select: { id: true, name: true, photoUrl: true },
+          },
+          reviewedBy: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.swapRequest.findMany({
         where: {
-          status: 'PENDING_MANAGER',
-          ...churchFilter,
+          status: 'PENDING_TARGET',
+          requesterId: { not: userId },
+          OR: [
+            { targetUserId: userId },
+            {
+              targetUserId: null,
+              assignment: {
+                slot: {
+                  departmentId: { in: myDeptIds },
+                },
+              },
+            },
+          ],
         },
         include: {
           requester: {
-            select: { id: true, name: true, photoUrl: true },
-          },
-          targetUser: {
             select: { id: true, name: true, photoUrl: true },
           },
           assignment: {
@@ -172,13 +146,41 @@ export async function GET() {
               },
             },
           },
-          reviewedBy: {
-            select: { id: true, name: true },
-          },
         },
-        orderBy: { updatedAt: 'desc' },
-      }) as any;
-    }
+        orderBy: { createdAt: 'desc' },
+      }),
+      canApprove
+        ? prisma.swapRequest.findMany({
+            where: {
+              status: 'PENDING_MANAGER',
+              ...churchFilter,
+            },
+            include: {
+              requester: {
+                select: { id: true, name: true, photoUrl: true },
+              },
+              targetUser: {
+                select: { id: true, name: true, photoUrl: true },
+              },
+              assignment: {
+                include: {
+                  slot: {
+                    include: {
+                      program: true,
+                      department: true,
+                      function: true,
+                    },
+                  },
+                },
+              },
+              reviewedBy: {
+                select: { id: true, name: true },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([]),
+    ]);
 
     return NextResponse.json({
       success: true,

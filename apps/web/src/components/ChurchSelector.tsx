@@ -47,7 +47,6 @@ export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: 
 
       if (res.ok) {
         router.refresh();
-        window.location.reload();
       } else {
         setSwitchError('Não foi possível alternar de congregação.');
       }

@@ -11,8 +11,10 @@ export default async function ProgramasPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
-  const churchContext = await getActiveChurchContext();
+  const [userContext, churchContext] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
   const activeChurchId = churchContext.church?.id;
 
   const canManage = can(userContext, 'program:create', {
@@ -24,34 +26,34 @@ export default async function ProgramasPage() {
     ? { OR: [{ churchId: activeChurchId }, { churchId: null }] }
     : {};
 
-  // Busca programas da congregação ativa ordenados por data
-  const programs = await prisma.program.findMany({
-    where: churchFilter,
-    include: {
-      departments: {
-        include: { department: true },
+  // Busca programas e departamentos da congregação ativa em paralelo
+  const [programs, departments] = await Promise.all([
+    prisma.program.findMany({
+      where: churchFilter,
+      include: {
+        departments: {
+          include: { department: true },
+        },
+        // ⚡ Bolt Optimization: Use Prisma's _count to offload aggregation to the DB
+        // instead of fetching full relation arrays just to count the length in JS.
+        _count: {
+          select: { slots: true },
+        },
       },
-      // ⚡ Bolt Optimization: Use Prisma's _count to offload aggregation to the DB
-      // instead of fetching full relation arrays just to count the length in JS.
-      _count: {
-        select: { slots: true }
-      }
-    },
-    orderBy: {
-      date: 'asc',
-    },
-  });
-
-  // Busca departamentos da congregação ativa
-  const departments = await prisma.department.findMany({
-    where: churchFilter,
-    include: {
-      functions: true,
-    },
-    orderBy: {
-      name: 'asc',
-    },
-  });
+      orderBy: {
+        date: 'asc',
+      },
+    }),
+    prisma.department.findMany({
+      where: churchFilter,
+      include: {
+        functions: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    }),
+  ]);
 
   const userHierarchy = userContext ? ROLE_HIERARCHY_LEVEL[userContext.globalRole] : 1;
 

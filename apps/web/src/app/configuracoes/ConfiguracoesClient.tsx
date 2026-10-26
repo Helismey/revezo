@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { validateChurchThemeColor, ThemeContrastReport } from '@revezo/domain';
 import { AlertBanner } from '@/components/AlertBanner';
 
@@ -12,6 +13,7 @@ interface ChurchSettingsData {
 }
 
 export function ConfiguracoesClient({ initialSettings }: { initialSettings: ChurchSettingsData }) {
+  const router = useRouter();
   const [name, setName] = useState(initialSettings.name);
   const [logoUrl, setLogoUrl] = useState(initialSettings.logoUrl || '');
   const [primaryColor, setPrimaryColor] = useState(initialSettings.primaryColor);
@@ -58,8 +60,13 @@ export function ConfiguracoesClient({ initialSettings }: { initialSettings: Chur
         return;
       }
 
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.setProperty('--color-primary', primaryColor);
+        document.documentElement.style.setProperty('--color-secondary', secondaryColor);
+      }
+
       setMessage({ type: 'sucesso', text: 'Configurações e tema da igreja atualizados com sucesso!' });
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de comunicação ao salvar.' });
     } finally {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import { Church, UsersThree, SquaresFour, CalendarBlank, MapPin, Phone, CheckCircle, ArrowsLeftRight, Gear, Cross, X } from '@/components/Icons';
 
@@ -66,6 +67,7 @@ export function IgrejasClient({
   userRole,
   userId,
 }: IgrejasClientProps) {
+  const router = useRouter();
   const [churches, setChurches] = useState<ChurchListItem[]>(initialChurches);
   const [activeChurchId, setActiveChurchId] = useState<string | undefined>(currentActiveId);
   const [showModal, setShowModal] = useState(false);
@@ -160,10 +162,8 @@ export function IgrejasClient({
       const data = await res.json();
       if (res.ok && data.success) {
         setActiveChurchId(churchId);
-        setMessage({ type: 'sucesso', text: 'Congregação ativa alterada com sucesso! Recarregando...' });
-        setTimeout(() => {
-          window.location.reload();
-        }, 600);
+        setMessage({ type: 'sucesso', text: 'Congregação ativa alterada com sucesso!' });
+        router.refresh();
       } else {
         setMessage({ type: 'erro', text: data.error || 'Erro ao alternar congregação' });
       }

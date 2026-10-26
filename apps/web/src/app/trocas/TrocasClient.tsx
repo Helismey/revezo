@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 
@@ -25,7 +25,7 @@ interface MyAssignment {
   endsAt: string;
 }
 
-interface SwapItem {
+export interface SwapItem {
   id: string;
   assignmentId: string;
   requesterId: string;
@@ -57,26 +57,32 @@ interface TrocasClientProps {
   isManager: boolean;
   myFutureAssignments: MyAssignment[];
   potentialTargets: PotentialTarget[];
+  initialSwaps?: {
+    solicitadas: SwapItem[];
+    recebidas: SwapItem[];
+    paraAprovacao: SwapItem[];
+  };
 }
 
 export default function TrocasClient({
-  userId,
+  userId: _userId,
   isAdmin,
   isManager,
   myFutureAssignments,
   potentialTargets,
+  initialSwaps,
 }: TrocasClientProps) {
   const [activeTab, setActiveTab] = useState<'recebidas' | 'solicitadas' | 'aprovacoes'>(
     isManager || isAdmin ? 'aprovacoes' : 'recebidas'
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialSwaps);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [solicitadas, setSolicitadas] = useState<SwapItem[]>([]);
-  const [recebidas, setRecebidas] = useState<SwapItem[]>([]);
-  const [paraAprovacao, setParaAprovacao] = useState<SwapItem[]>([]);
+  const [solicitadas, setSolicitadas] = useState<SwapItem[]>(initialSwaps?.solicitadas || []);
+  const [recebidas, setRecebidas] = useState<SwapItem[]>(initialSwaps?.recebidas || []);
+  const [paraAprovacao, setParaAprovacao] = useState<SwapItem[]>(initialSwaps?.paraAprovacao || []);
 
   // Modal de novo pedido de troca
   const [showModal, setShowModal] = useState(false);
@@ -86,9 +92,9 @@ export default function TrocasClient({
   const [cancelSwapId, setCancelSwapId] = useState<string | null>(null);
   const [rejectSwapId, setRejectSwapId] = useState<string | null>(null);
 
-  // Carrega lista de trocas
-  async function loadSwaps() {
-    setLoading(true);
+  // Carrega lista de trocas sob demanda (ou apenas se não vier do SSR)
+  async function loadSwaps(showSpinner = false) {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch('/api/trocas');
       const data = await res.json();
@@ -107,8 +113,10 @@ export default function TrocasClient({
   }
 
   useEffect(() => {
-    loadSwaps();
-  }, []);
+    if (!initialSwaps) {
+      void loadSwaps(true);
+    }
+  }, [initialSwaps]);
 
   // Solicitar nova troca
   async function handleCreateSwap(e: React.FormEvent) {
@@ -135,7 +143,7 @@ export default function TrocasClient({
         setSuccess('Solicitação de troca enviada com sucesso!');
         setShowModal(false);
         setSwapReason('');
-        loadSwaps();
+        void loadSwaps(false);
       } else {
         setError(data.error || 'Falha ao solicitar troca');
       }
@@ -146,11 +154,15 @@ export default function TrocasClient({
     }
   }
 
-  // Responder a um pedido (Aceitar ou Recusar)
+  // Responder a um pedido (Aceitar ou Recusar) com atualização otimista
   async function handleRespond(swapRequestId: string, action: 'ACCEPT' | 'REJECT') {
     setSubmitting(true);
     setError(null);
     setSuccess(null);
+
+    // Atualização otimista imediata da lista
+    const prevRecebidas = recebidas;
+    setRecebidas((prev) => prev.filter((item) => item.id !== swapRequestId));
 
     try {
       const res = await fetch('/api/trocas/responder', {
@@ -166,21 +178,28 @@ export default function TrocasClient({
             ? 'Troca aceita! O pedido foi encaminhado para aprovação do gestor.'
             : 'Proposta de troca recusada.'
         );
-        loadSwaps();
+        void loadSwaps(false);
       } else {
+        setRecebidas(prevRecebidas);
         setError(data.error || 'Erro ao processar resposta');
       }
     } catch {
+      setRecebidas(prevRecebidas);
       setError('Erro de conexão ao responder pedido');
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Cancelar pedido
+  // Cancelar pedido com atualização otimista
   async function handleCancel(swapRequestId: string) {
     setSubmitting(true);
     setError(null);
+
+    const prevSolicitadas = solicitadas;
+    setSolicitadas((prev) =>
+      prev.map((item) => (item.id === swapRequestId ? { ...item, status: 'CANCELLED' } : item))
+    );
 
     try {
       const res = await fetch('/api/trocas/cancelar', {
@@ -193,22 +212,27 @@ export default function TrocasClient({
       if (data.success) {
         setSuccess('Pedido de troca cancelado.');
         setCancelSwapId(null);
-        loadSwaps();
+        void loadSwaps(false);
       } else {
+        setSolicitadas(prevSolicitadas);
         setError(data.error || 'Erro ao cancelar pedido');
       }
     } catch {
+      setSolicitadas(prevSolicitadas);
       setError('Erro de conexão ao cancelar');
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Aprovar ou Rejeitar pelo Gestor
+  // Aprovar ou Rejeitar pelo Gestor com atualização otimista
   async function handleReview(swapRequestId: string, action: 'APPROVE' | 'REJECT', notes?: string) {
     setSubmitting(true);
     setError(null);
     setSuccess(null);
+
+    const prevParaAprovacao = paraAprovacao;
+    setParaAprovacao((prev) => prev.filter((item) => item.id !== swapRequestId));
 
     try {
       const res = await fetch('/api/trocas/aprovar', {
@@ -224,28 +248,36 @@ export default function TrocasClient({
             ? 'Troca aprovada com sucesso! A escala foi atualizada automaticamente.'
             : 'Troca rejeitada.'
         );
-        loadSwaps();
+        void loadSwaps(false);
       } else {
+        setParaAprovacao(prevParaAprovacao);
         setError(data.error || 'Erro ao revisar troca');
       }
     } catch {
+      setParaAprovacao(prevParaAprovacao);
       setError('Erro de conexão ao revisar troca');
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Filtra voluntários compatíveis com o slot selecionado
-  const currentSelectedAssignment = myFutureAssignments.find((a) => a.id === selectedAssignmentId);
-  const eligibleTargets = potentialTargets.filter((pt) => {
-    if (!currentSelectedAssignment) return true;
-    const mem = pt.memberships.find((m) => m.departmentId === currentSelectedAssignment.departmentId);
-    if (!mem) return false;
-    if (currentSelectedAssignment.functionId) {
-      return mem.functions.some((f) => f.functionId === currentSelectedAssignment.functionId);
-    }
-    return true;
-  });
+  // Filtra voluntários compatíveis com o slot selecionado (memoizado)
+  const eligibleTargets = useMemo(() => {
+    const currentSelectedAssignment = myFutureAssignments.find(
+      (a) => a.id === selectedAssignmentId
+    );
+    if (!currentSelectedAssignment) return potentialTargets;
+    return potentialTargets.filter((pt) => {
+      const mem = pt.memberships.find(
+        (m) => m.departmentId === currentSelectedAssignment.departmentId
+      );
+      if (!mem) return false;
+      if (currentSelectedAssignment.functionId) {
+        return mem.functions.some((f) => f.functionId === currentSelectedAssignment.functionId);
+      }
+      return true;
+    });
+  }, [myFutureAssignments, potentialTargets, selectedAssignmentId]);
 
   return (
     <div className="space-y-6">
@@ -381,14 +413,14 @@ export default function TrocasClient({
                           <button
                             disabled={submitting}
                             onClick={() => handleReview(item.id, 'APPROVE')}
-                            className="px-4 py-2 bg-success text-white font-semibold text-xs sm:text-sm rounded-control hover:opacity-95 min-h-touch"
+                            className="px-4 py-2 bg-success text-white font-semibold text-xs sm:text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50"
                           >
                             Aprovar Troca
                           </button>
                           <button
                             disabled={submitting}
                             onClick={() => setRejectSwapId(item.id)}
-                            className="px-3.5 py-2 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold text-xs sm:text-sm rounded-control min-h-touch"
+                            className="px-3.5 py-2 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold text-xs sm:text-sm rounded-control min-h-touch disabled:opacity-50"
                           >
                             Rejeitar
                           </button>
@@ -448,14 +480,14 @@ export default function TrocasClient({
                           <button
                             disabled={submitting}
                             onClick={() => handleRespond(item.id, 'ACCEPT')}
-                            className="px-4 py-2 bg-primary text-white font-semibold text-xs sm:text-sm rounded-control hover:opacity-95 min-h-touch"
+                            className="px-4 py-2 bg-primary text-white font-semibold text-xs sm:text-sm rounded-control hover:opacity-95 min-h-touch disabled:opacity-50"
                           >
                             Aceitar Troca
                           </button>
                           <button
                             disabled={submitting}
                             onClick={() => handleRespond(item.id, 'REJECT')}
-                            className="px-3.5 py-2 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold text-xs sm:text-sm rounded-control min-h-touch"
+                            className="px-3.5 py-2 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold text-xs sm:text-sm rounded-control min-h-touch disabled:opacity-50"
                           >
                             Não Posso
                           </button>
@@ -533,7 +565,7 @@ export default function TrocasClient({
                           <button
                             disabled={submitting}
                             onClick={() => setCancelSwapId(item.id)}
-                            className="text-xs text-danger hover:underline font-semibold"
+                            className="text-xs text-danger hover:underline font-semibold disabled:opacity-50"
                           >
                             Cancelar Pedido
                           </button>

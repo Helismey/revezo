@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import {
   UsersThree,
@@ -73,6 +74,7 @@ export function AprovacoesClient({
   activeVolunteers = [],
   initialTab = 'users',
 }: AprovacoesClientProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'users' | 'schedules'>(initialTab);
 
   // Estados da aba de usuários
@@ -146,7 +148,7 @@ export function AprovacoesClient({
 
       setMessage({ type: 'sucesso', text: `Cadastro de ${selectedUser.name} aprovado com sucesso!` });
       setSelectedUser(null);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de comunicação ao aprovar cadastro.' });
     } finally {
@@ -173,7 +175,7 @@ export function AprovacoesClient({
       }
 
       setMessage({ type: 'sucesso', text: `Cadastro de ${name} rejeitado.` });
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro ao rejeitar cadastro.' });
     } finally {
@@ -223,7 +225,7 @@ export function AprovacoesClient({
         text: data.message || `${assignmentIds.length} escala(s) aprovada(s) com sucesso!`,
       });
       setSelectedScheduleIds(new Set());
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Falha de comunicação ao aprovar escalas.' });
     } finally {
@@ -258,7 +260,7 @@ export function AprovacoesClient({
       });
       setAdjustingAssignment(null);
       setNewVolunteerId('');
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro ao comunicar ajuste da escala.' });
     } finally {
@@ -291,7 +293,7 @@ export function AprovacoesClient({
         type: 'sucesso',
         text: data.message || 'Escala(s) rejeitada(s) e vagas reabertas.',
       });
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro ao rejeitar escalas.' });
     } finally {

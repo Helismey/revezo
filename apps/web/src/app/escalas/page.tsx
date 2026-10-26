@@ -11,8 +11,10 @@ export default async function EscalasPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
-  const { activeChurch } = await getActiveChurchContext();
+  const [userContext, { activeChurch }] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
 
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
   const isPastor = userContext?.globalRole === 'PASTOR';
@@ -20,62 +22,80 @@ export default async function EscalasPage() {
   const isManager = userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
   const isAuthorized = Boolean(isAdmin || isPastor || isElder || isManager);
 
-  // Busca todos os programas futuros com seus slots e escalas da congregação ativa
-  const programs = await prisma.program.findMany({
-    where: {
-      ...(activeChurch ? { churchId: activeChurch.id } : {}),
-    },
-    include: {
-      slots: {
-        include: {
-          department: true,
-          function: true,
-          assignments: {
-            where: {
-              status: { notIn: ['DECLINED', 'SUBSTITUTED'] },
+  // Busca em paralelo todos os programas com seus slots/escalas e voluntários ativos da congregação
+  const [programs, activeUsers] = await Promise.all([
+    prisma.program.findMany({
+      where: {
+        ...(activeChurch ? { churchId: activeChurch.id } : {}),
+      },
+      include: {
+        slots: {
+          include: {
+            department: {
+              select: { id: true, name: true },
             },
-            include: {
-              user: {
-                select: { id: true, name: true },
+            function: {
+              select: { id: true, name: true },
+            },
+            assignments: {
+              where: {
+                status: { notIn: ['DECLINED', 'SUBSTITUTED'] },
+              },
+              include: {
+                user: {
+                  select: { id: true, name: true },
+                },
               },
             },
           },
-        },
-        orderBy: {
-          startsAt: 'asc',
-        },
-      },
-    },
-    orderBy: {
-      date: 'asc',
-    },
-  });
-
-  // Busca voluntários ativos da congregação com suas disponibilidades e escalas ativas
-  const activeUsers = await prisma.user.findMany({
-    where: {
-      status: 'ACTIVE',
-      ...(activeChurch ? { churchId: activeChurch.id } : {}),
-    },
-    include: {
-      memberships: {
-        include: {
-          functions: true,
-        },
-      },
-      availabilities: true,
-      assignments: {
-        where: {
-          status: { in: ['CONFIRMED', 'PENDING'] },
-        },
-        include: {
-          slot: {
-            select: { startsAt: true, endsAt: true },
+          orderBy: {
+            startsAt: 'asc',
           },
         },
       },
-    },
-  });
+      orderBy: {
+        date: 'asc',
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(activeChurch ? { churchId: activeChurch.id } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        memberships: {
+          select: {
+            departmentId: true,
+            functions: {
+              select: { functionId: true },
+            },
+          },
+        },
+        availabilities: {
+          select: {
+            kind: true,
+            weekday: true,
+            from: true,
+            to: true,
+          },
+        },
+        assignments: {
+          where: {
+            status: { in: ['CONFIRMED', 'PENDING'] },
+          },
+          select: {
+            id: true,
+            status: true,
+            slot: {
+              select: { startsAt: true, endsAt: true },
+            },
+          },
+        },
+      },
+    }),
+  ]);
 
   const serializedPrograms: SerializedProgram[] = programs.map((p) => ({
     id: p.id,

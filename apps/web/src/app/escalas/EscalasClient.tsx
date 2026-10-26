@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import {
   Sparkle,
@@ -73,6 +74,7 @@ export function EscalasClient({
   canManageAll = false,
   managedDepartmentIds = [],
 }: EscalasClientProps) {
+  const router = useRouter();
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
     programs[0]?.id || ''
   );
@@ -192,7 +194,7 @@ export function EscalasClient({
         text: data.message || `${data.data.createdCount} escala(s) aplicada(s) com sucesso!`,
       });
       setShowAutoModal(false);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({
         type: 'erro',
@@ -244,7 +246,7 @@ export function EscalasClient({
         type: 'sucesso',
         text: 'Escala aprovada com sucesso! O voluntário já pode visualizar e confirmar a presença.',
       });
-      window.location.reload();
+      router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao aprovar escala';
       setMessage({ type: 'erro', text: msg });
@@ -286,8 +288,7 @@ export function EscalasClient({
       });
       setActiveSlotId(null);
       setSelectedVolunteerId('');
-      // Recarrega a página para atualizar as atribuições
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({
         type: 'erro',
@@ -326,7 +327,7 @@ export function EscalasClient({
         text: 'Escala removida com sucesso.',
       });
       setPendingRemoveAssignmentId(null);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({
         type: 'erro',

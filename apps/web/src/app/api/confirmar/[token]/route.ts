@@ -47,8 +47,10 @@ export async function GET(
       );
     }
 
-    const church = await prisma.churchSettings.findFirst();
-    const result = await verifyConfirmationToken(token);
+    const [church, result] = await Promise.all([
+      prisma.churchSettings.findFirst(),
+      verifyConfirmationToken(token),
+    ]);
 
     if (!result.valid) {
       return NextResponse.json(

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useOptimistic } from 'react';
 import Link from 'next/link';
 import { CalendarMonthView, CalendarEventItem } from '@/components/CalendarMonthView';
 import { ListBullets, Calendar, Check, ArrowsLeftRight, X, Warning } from '@/components/Icons';
+import { ActionSubmitButton } from '@/components/ActionSubmitButton';
 
 export interface VolunteerAssignmentItem {
   id: string;
@@ -46,18 +47,36 @@ export function MinhaEscalaClient({
   const [declineReason, setDeclineReason] = useState('');
   const [isSubmittingDecline, setIsSubmittingDecline] = useState(false);
 
+  // Atualização otimista imediata de status na listagem e no calendário
+  const [optimisticAssignments, applyOptimisticUpdate] = useOptimistic(
+    assignments,
+    (
+      state: VolunteerAssignmentItem[],
+      update: { id: string; status: VolunteerAssignmentItem['status']; declinedReason?: string }
+    ) =>
+      state.map((item) =>
+        item.id === update.id
+          ? {
+              ...item,
+              status: update.status,
+              declinedReason: update.declinedReason ?? item.declinedReason,
+            }
+          : item
+      )
+  );
+
   // Departamentos distintos em que o voluntário está escalado
   const departments = useMemo(() => {
     const map = new Map<string, string>();
-    for (const a of assignments) {
+    for (const a of optimisticAssignments) {
       map.set(a.slot.department.id, a.slot.department.name);
     }
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [assignments]);
+  }, [optimisticAssignments]);
 
   // Eventos mapeados para o componente de calendário
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
-    return assignments.map((asg) => {
+    return optimisticAssignments.map((asg) => {
       const startsAt = new Date(asg.slot.startsAt);
       const endsAt = new Date(asg.slot.endsAt);
       const timeStr = `${startsAt.toLocaleTimeString('pt-BR', {
@@ -82,7 +101,7 @@ export function MinhaEscalaClient({
         meta: asg,
       };
     });
-  }, [assignments]);
+  }, [optimisticAssignments]);
 
   return (
     <div className="space-y-4">
@@ -125,7 +144,7 @@ export function MinhaEscalaClient({
           canAddEvent={false}
           emptyStateMessage="Você não possui nenhuma escala agendada para este dia."
         />
-      ) : assignments.length === 0 ? (
+      ) : optimisticAssignments.length === 0 ? (
         <div className="bg-surface rounded-surface border border-line p-8 text-center shadow-sm">
           <p className="text-ink-muted text-sm">
             Você não está escalado(a) nos próximos dias. Quando for escalado(a), aparecerá aqui.
@@ -133,7 +152,7 @@ export function MinhaEscalaClient({
         </div>
       ) : (
         <div className="bg-surface rounded-surface border border-line divide-y divide-line overflow-hidden shadow-sm">
-          {assignments.map((asg) => {
+          {optimisticAssignments.map((asg) => {
             const isPast = new Date(asg.slot.endsAt) < new Date();
             const startsAt = new Date(asg.slot.startsAt);
             const endsAt = new Date(asg.slot.endsAt);
@@ -207,14 +226,19 @@ export function MinhaEscalaClient({
                 {!isPast && asg.status !== 'DECLINED' && asg.status !== 'SUBSTITUTED' && (
                   <div className="flex items-center space-x-2 flex-wrap gap-y-2">
                     {asg.status === 'PENDING' && (
-                      <form action={confirmAction}>
+                      <form
+                        action={async (formData) => {
+                          applyOptimisticUpdate({ id: asg.id, status: 'CONFIRMED' });
+                          await confirmAction(formData);
+                        }}
+                      >
                         <input type="hidden" name="assignmentId" value={asg.id} />
-                        <button
-                          type="submit"
+                        <ActionSubmitButton
+                          pendingText="Confirmando..."
                           className="px-4 py-2 bg-success text-white font-semibold rounded-control text-xs sm:text-sm hover:bg-success/90 min-h-touch transition-all shadow-sm inline-flex items-center gap-1.5"
                         >
                           <Check size={16} weight="bold" /> Confirmar presença
-                        </button>
+                        </ActionSubmitButton>
                       </form>
                     )}
 
@@ -255,7 +279,8 @@ export function MinhaEscalaClient({
             const formData = new FormData();
             formData.set('assignmentId', declineTarget.id);
             const prefix = isUrgent ? '[URGENTE <24H] ' : '';
-            formData.set('reason', `${prefix}${declineReason.trim() || 'Imprevisto informado pelo voluntário'}`);
+            const finalReason = `${prefix}${declineReason.trim() || 'Imprevisto informado pelo voluntário'}`;
+            formData.set('reason', finalReason);
             await declineAction(formData);
             setDeclineTarget(null);
             setDeclineReason('');

@@ -8,8 +8,8 @@ import {
 } from '@/services/notifications/swap-and-sub-notifications';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { can } from '@revezo/domain';
 import { CalendarBlank, Warning, ArrowsLeftRight, ChartBar, Check } from '@/components/Icons';
+import { ActionSubmitButton } from '@/components/ActionSubmitButton';
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -17,12 +17,13 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
-  const churchContext = await getActiveChurchContext();
+  const [userContext, churchContext] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
   const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
   const now = new Date();
 
-  // 1. Busca a próxima escala do voluntário
   type AssignmentWithSlot = NonNullable<Awaited<ReturnType<typeof prisma.assignment.findFirst<{
     include: {
       slot: {
@@ -52,115 +53,105 @@ export default async function DashboardPage() {
   let pendingSwapsCount = 0;
 
   try {
-    nextAssignment = await prisma.assignment.findFirst({
-      where: {
-        userId: session.userId,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        slot: {
-          startsAt: { gte: now },
-        },
-      },
-      include: {
-        slot: {
-          include: {
-            department: true,
-            function: true,
-            program: true,
-          },
-        },
-      },
-      orderBy: {
-        slot: {
-          startsAt: 'asc',
-        },
-      },
-    });
+    const isFullChurchAdmin = isAdmin || isPastor || isElder;
+    const managedDeptIds = isFullChurchAdmin
+      ? undefined
+      : userContext?.departmentMemberships
+          .filter((m) => m.role === 'MANAGER')
+          .map((m) => m.departmentId);
 
-    upcomingAssignments = await prisma.assignment.findMany({
-      where: {
-        userId: session.userId,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        id: nextAssignment ? { not: nextAssignment.id } : undefined,
-        slot: {
-          startsAt: { gte: now },
-        },
-      },
-      include: {
-        slot: {
-          include: {
-            department: true,
-            function: true,
-            program: true,
-          },
-        },
-      },
-      orderBy: {
-        slot: {
-          startsAt: 'asc',
-        },
-      },
-      take: 5,
-    });
-
-    if (canViewManagement) {
-      const isFullChurchAdmin = isAdmin || isPastor || isElder;
-      const managedDeptIds = isFullChurchAdmin
-        ? undefined
-        : userContext?.departmentMemberships
-            .filter((m) => m.role === 'MANAGER')
-            .map((m) => m.departmentId);
-
-      const [
-        approvalsCount,
-        membersCount,
-        programsCount,
-        futureSlots,
-        swapsCount,
-      ] = await Promise.all([
-        prisma.user.count({
-          where: {
-            status: 'PENDING',
-            ...(activeChurchId ? { churchId: activeChurchId } : {}),
-          },
-        }),
-        prisma.user.count({
-          where: {
-            status: 'ACTIVE',
-            ...(activeChurchId ? { churchId: activeChurchId } : {}),
-          },
-        }),
-        prisma.program.count({
-          where: {
-            date: { gte: now },
-            ...(activeChurchId ? { churchId: activeChurchId } : {}),
-          },
-        }),
-        prisma.programSlot.findMany({
-          where: {
+    // Consolida nextAssignment + upcomingAssignments em 1 única consulta (take: 6)
+    // e executa simultaneamente com os contadores de gestão via Promise.all
+    const [
+      futureUserAssignments,
+      approvalsCount,
+      membersCount,
+      programsCount,
+      futureSlots,
+      swapsCount,
+    ] = await Promise.all([
+      prisma.assignment.findMany({
+        where: {
+          userId: session.userId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          slot: {
             startsAt: { gte: now },
-            ...(activeChurchId ? { program: { churchId: activeChurchId } } : {}),
-            ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
           },
-          select: {
-            requiredCount: true,
-            _count: {
-              select: {
-                assignments: {
-                  where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+        },
+        include: {
+          slot: {
+            include: {
+              department: true,
+              function: true,
+              program: true,
+            },
+          },
+        },
+        orderBy: {
+          slot: {
+            startsAt: 'asc',
+          },
+        },
+        take: 6,
+      }),
+      canViewManagement
+        ? prisma.user.count({
+            where: {
+              status: 'PENDING',
+              ...(activeChurchId ? { churchId: activeChurchId } : {}),
+            },
+          })
+        : Promise.resolve(0),
+      canViewManagement
+        ? prisma.user.count({
+            where: {
+              status: 'ACTIVE',
+              ...(activeChurchId ? { churchId: activeChurchId } : {}),
+            },
+          })
+        : Promise.resolve(0),
+      canViewManagement
+        ? prisma.program.count({
+            where: {
+              date: { gte: now },
+              ...(activeChurchId ? { churchId: activeChurchId } : {}),
+            },
+          })
+        : Promise.resolve(0),
+      canViewManagement
+        ? prisma.programSlot.findMany({
+            where: {
+              startsAt: { gte: now },
+              ...(activeChurchId ? { program: { churchId: activeChurchId } } : {}),
+              ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+            },
+            select: {
+              requiredCount: true,
+              _count: {
+                select: {
+                  assignments: {
+                    where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+                  },
                 },
               },
             },
-          },
-        }),
-        prisma.swapRequest.count({
-          where: {
-            status: 'PENDING_MANAGER',
-            ...(activeChurchId ? { assignment: { slot: { program: { churchId: activeChurchId } } } } : {}),
-            ...(managedDeptIds ? { assignment: { slot: { departmentId: { in: managedDeptIds } } } } : {}),
-          },
-        }),
-      ]);
+          })
+        : Promise.resolve([]),
+      canViewManagement
+        ? prisma.swapRequest.count({
+            where: {
+              status: 'PENDING_MANAGER',
+              ...(activeChurchId ? { assignment: { slot: { program: { churchId: activeChurchId } } } } : {}),
+              ...(managedDeptIds ? { assignment: { slot: { departmentId: { in: managedDeptIds } } } } : {}),
+            },
+          })
+        : Promise.resolve(0),
+    ]);
 
+    nextAssignment = futureUserAssignments[0] ?? null;
+    upcomingAssignments = futureUserAssignments.slice(1, 6);
+
+    if (canViewManagement) {
       pendingApprovalsCount = approvalsCount;
       totalActiveMembers = membersCount;
       upcomingProgramsCount = programsCount;
@@ -278,12 +269,12 @@ export default async function DashboardPage() {
                 {nextAssignment.status === 'PENDING' ? (
                   <form action={confirmAction}>
                     <input type="hidden" name="assignmentId" value={nextAssignment.id} />
-                    <button
-                      type="submit"
+                    <ActionSubmitButton
+                      pendingText="Confirmando..."
                       className="px-5 py-2.5 bg-success text-white font-semibold rounded-control hover:opacity-95 text-sm min-h-touch active:scale-[0.98] transition-all shadow-subtle flex items-center gap-1.5"
                     >
                       <Check size={16} /> Confirmar presença
-                    </button>
+                    </ActionSubmitButton>
                   </form>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-control text-xs font-bold bg-success-soft text-success-ink">
@@ -294,12 +285,12 @@ export default async function DashboardPage() {
                 <form action={declineAction}>
                   <input type="hidden" name="assignmentId" value={nextAssignment.id} />
                   <input type="hidden" name="reason" value="Imprevisto informado pelo voluntário" />
-                  <button
-                    type="submit"
+                  <ActionSubmitButton
+                    pendingText="Desmarcando..."
                     className="px-4 py-2.5 border border-line text-ink-muted hover:text-danger hover:border-danger font-semibold rounded-control text-sm min-h-touch transition-colors"
                   >
                     Desmarcar da escala
-                  </button>
+                  </ActionSubmitButton>
                 </form>
               </div>
             </div>
@@ -347,12 +338,12 @@ export default async function DashboardPage() {
                   {asg.status === 'PENDING' ? (
                     <form action={confirmAction}>
                       <input type="hidden" name="assignmentId" value={asg.id} />
-                      <button
-                        type="submit"
+                      <ActionSubmitButton
+                        pendingText="Confirmando..."
                         className="px-3 py-1.5 bg-success text-white text-xs font-semibold rounded-control min-h-touch"
                       >
                         Confirmar
-                      </button>
+                      </ActionSubmitButton>
                     </form>
                   ) : (
                     <span className="text-xs font-bold text-success-ink bg-success-soft px-2.5 py-1 rounded-control">

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import { ConfirmDialog } from '@/components/Modal';
 
@@ -40,6 +41,7 @@ export function DepartamentosClient({
   isAdmin,
   managedDepartmentIds,
 }: DepartamentosClientProps) {
+  const router = useRouter();
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [activeDeptIdForFunction, setActiveDeptIdForFunction] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export function DepartamentosClient({
       setMessage({ type: 'sucesso', text: 'Departamento criado com sucesso!' });
       setShowDeptModal(false);
       setNewDeptName('');
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão.' });
     } finally {
@@ -120,7 +122,7 @@ export function DepartamentosClient({
       setMessage({ type: 'sucesso', text: 'Função criada com sucesso!' });
       setActiveDeptIdForFunction(null);
       setNewFunctionName('');
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão.' });
     } finally {
@@ -158,7 +160,7 @@ export function DepartamentosClient({
       setSelectedUserId('');
       setSelectedRole('MEMBER');
       setSelectedFunctionIds([]);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão ao salvar voluntário.' });
     } finally {
@@ -193,7 +195,7 @@ export function DepartamentosClient({
 
       setMessage({ type: 'sucesso', text: 'Funções e atribuições atualizadas com sucesso!' });
       setEditingMember(null);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão ao atualizar membro.' });
     } finally {
@@ -227,7 +229,7 @@ export function DepartamentosClient({
 
       setMessage({ type: 'sucesso', text: 'Voluntário desvinculado com sucesso.' });
       setPendingRemoveMember(null);
-      window.location.reload();
+      router.refresh();
     } catch {
       setMessage({ type: 'erro', text: 'Erro de conexão ao desvincular membro.' });
     } finally {
@@ -266,7 +268,6 @@ export function DepartamentosClient({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {departments.map((dept) => {
           const userCanManage = canManageDept(dept.id);
-          const currentMemberUserIds = dept.members.map((m) => m.userId);
 
           return (
             <div

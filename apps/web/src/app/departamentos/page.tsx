@@ -11,11 +11,13 @@ export default async function DepartamentosPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
+  const [userContext, churchContext] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
   if (!userContext || userContext.status !== 'ACTIVE') {
     redirect('/login');
   }
-  const churchContext = await getActiveChurchContext();
   const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
 
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
@@ -29,49 +31,51 @@ export default async function DepartamentosPage() {
       .filter((m) => m.role === 'MANAGER')
       .map((m) => m.departmentId) || [];
 
-  const depts = await prisma.department.findMany({
-    where: activeChurchId ? { churchId: activeChurchId } : undefined,
-    include: {
-      functions: {
-        orderBy: { name: 'asc' },
-      },
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phonePrimary: true,
-            },
-          },
-          functions: {
-            include: {
-              function: true,
-            },
-          },
-        },
-        orderBy: {
-          user: { name: 'asc' },
-        },
-      },
-    },
-    orderBy: {
-      name: 'asc',
-    },
-  });
-
   const canAssignMembers = canManageAll || managedDepartmentIds.length > 0;
-  const activeUsers = canAssignMembers
-    ? await prisma.user.findMany({
-        where: {
-          status: 'ACTIVE',
-          ...(activeChurchId ? { churchId: activeChurchId } : {}),
+
+  const [depts, activeUsers] = await Promise.all([
+    prisma.department.findMany({
+      where: activeChurchId ? { churchId: activeChurchId } : undefined,
+      include: {
+        functions: {
+          orderBy: { name: 'asc' },
         },
-        select: { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-      })
-    : [];
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phonePrimary: true,
+              },
+            },
+            functions: {
+              include: {
+                function: true,
+              },
+            },
+          },
+          orderBy: {
+            user: { name: 'asc' },
+          },
+        },
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    }),
+    canAssignMembers
+      ? prisma.user.findMany({
+          where: {
+            status: 'ACTIVE',
+            ...(activeChurchId ? { churchId: activeChurchId } : {}),
+          },
+          select: { id: true, name: true, email: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const serializedDepts: DepartmentDetail[] = depts.map((d) => {
     const isManagerOfThisDept = managedDepartmentIds.includes(d.id);

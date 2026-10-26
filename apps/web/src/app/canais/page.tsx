@@ -18,30 +18,36 @@ export default async function CanaisPage() {
     redirect('/');
   }
 
-  // 1. Busca feature flags atuais
-  const flags = await prisma.featureFlag.findMany();
+  // 1. Busca feature flags, histórico recente de notificações e voluntários ativos em paralelo
+  const [flags, recentLogs, activeUsers] = await Promise.all([
+    prisma.featureFlag.findMany(),
+    prisma.notificationLog.findMany({
+      orderBy: { sentAt: 'desc' },
+      take: 20,
+      include: {
+        assignment: {
+          include: {
+            user: {
+              select: { name: true, phonePrimary: true, email: true },
+            },
+            slot: {
+              select: { title: true, department: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    }),
+    prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, email: true, phonePrimary: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+
   const flagMap: Record<string, boolean> = {};
   for (const f of flags) {
     flagMap[f.key] = f.enabled;
   }
-
-  // 2. Busca histórico recente de notificações para monitoramento
-  const recentLogs = await prisma.notificationLog.findMany({
-    orderBy: { sentAt: 'desc' },
-    take: 20,
-    include: {
-      assignment: {
-        include: {
-          user: {
-            select: { name: true, phonePrimary: true, email: true },
-          },
-          slot: {
-            select: { title: true, department: { select: { name: true } } },
-          },
-        },
-      },
-    },
-  });
 
   const serializedLogs = recentLogs.map((l) => ({
     id: l.id,
@@ -58,13 +64,6 @@ export default async function CanaisPage() {
       ? `${l.assignment.slot.department.name} (${l.assignment.slot.title})`
       : 'Disparo direto',
   }));
-
-  // 3. Voluntários ativos para o formulário de teste
-  const activeUsers = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
-    select: { id: true, name: true, email: true, phonePrimary: true },
-    orderBy: { name: 'asc' },
-  });
 
   return (
     <div className="space-y-6">

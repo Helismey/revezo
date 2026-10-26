@@ -17,8 +17,10 @@ export default async function AprovacoesPage() {
     redirect('/login');
   }
 
-  const userContext = await getCurrentUserContext();
-  const churchContext = await getActiveChurchContext();
+  const [userContext, churchContext] = await Promise.all([
+    getCurrentUserContext(),
+    getActiveChurchContext(),
+  ]);
   const activeChurchId = churchContext.church?.id;
 
   const isMasterOrElder =
@@ -51,84 +53,82 @@ export default async function AprovacoesPage() {
       ? { status: 'PENDING' as const, churchId: activeChurchId }
       : { status: 'PENDING' as const };
 
-  const pending = canApproveRegistrations
-    ? await prisma.user.findMany({
-        where: pendingWhere,
-        orderBy: { createdAt: 'asc' },
-      })
-    : [];
-
   // 2. Departamentos e Funções
   const deptWhere = isMasterOrElder
     ? (activeChurchId ? { OR: [{ churchId: activeChurchId }, { churchId: null }] } : undefined)
     : { id: { in: managedDeptIds } };
 
-  const departments = await prisma.department.findMany({
-    where: deptWhere,
-    include: { functions: true },
-    orderBy: { name: 'asc' },
-  });
-
-  // 3. Escalas preliminares pendentes de aprovação (geradas por Pastor / Ancião)
-  const pendingAssignments = await prisma.assignment.findMany({
-    where: {
-      status: 'PENDING_APPROVAL',
-      ...(!isMasterOrElder ? { slot: { departmentId: { in: managedDeptIds } } } : {}),
-      ...(activeChurchId ? { slot: { department: { churchId: activeChurchId } } } : {}),
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phonePrimary: true,
-        },
+  // Executa todas as 4 consultas independentes em paralelo
+  const [pending, departments, pendingAssignments, activeVolunteers] = await Promise.all([
+    canApproveRegistrations
+      ? prisma.user.findMany({
+          where: pendingWhere,
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve([]),
+    prisma.department.findMany({
+      where: deptWhere,
+      include: { functions: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.assignment.findMany({
+      where: {
+        status: 'PENDING_APPROVAL',
+        ...(!isMasterOrElder ? { slot: { departmentId: { in: managedDeptIds } } } : {}),
+        ...(activeChurchId ? { slot: { department: { churchId: activeChurchId } } } : {}),
       },
-      slot: {
-        include: {
-          program: {
-            select: {
-              id: true,
-              title: true,
-              date: true,
-            },
-          },
-          department: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          function: {
-            select: {
-              id: true,
-              name: true,
-            },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phonePrimary: true,
           },
         },
+        slot: {
+          include: {
+            program: {
+              select: {
+                id: true,
+                title: true,
+                date: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            function: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
-    },
-    orderBy: {
-      slot: { startsAt: 'asc' },
-    },
-  });
-
-  // 4. Voluntários ativos para caso o líder queira ajustar a atribuição
-  const activeVolunteers = await prisma.user.findMany({
-    where: {
-      status: 'ACTIVE',
-      ...(activeChurchId ? { churchId: activeChurchId } : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      memberships: {
-        select: { departmentId: true },
+      orderBy: {
+        slot: { startsAt: 'asc' },
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+    }),
+    prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(activeChurchId ? { churchId: activeChurchId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        memberships: {
+          select: { departmentId: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
   const serializedPending: PendingUser[] = pending.map((u) => ({
     id: u.id,

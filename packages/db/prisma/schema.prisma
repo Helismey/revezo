@@ -299,6 +299,7 @@ model Assignment {
   swapRequests   SwapRequest[]
   @@index([userId, status])
   @@index([slotId])
+  @@index([slotId, status])
   @@index([status])
   @@index([approvedById])
 }
@@ -312,6 +313,7 @@ model Availability {
   to      DateTime?
   user    User @relation(fields: [userId], references: [id])
   @@index([userId])
+  @@index([userId, kind])
 }
 
 model NotificationLog {
