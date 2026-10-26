@@ -18,6 +18,7 @@ export { UserCircle, UserCircle as UserCircleIcon } from '@phosphor-icons/react/
 export { SignOut, SignOut as SignOutIcon } from '@phosphor-icons/react/dist/ssr/SignOut';
 export { DotsThree, DotsThree as DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 export { CheckCircle } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+export { CircleNotch } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 export { Clock } from '@phosphor-icons/react/dist/ssr/Clock';
 export { Warning } from '@phosphor-icons/react/dist/ssr/Warning';
 export { XCircle } from '@phosphor-icons/react/dist/ssr/XCircle';
