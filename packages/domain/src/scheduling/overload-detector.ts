@@ -14,6 +14,24 @@ export interface OverloadBadge {
   variant: 'danger' | 'warning' | 'ok';
 }
 
+// ⚡ Bolt Optimization: Cache Intl.DateTimeFormat instances.
+// Creating new instances is expensive and these are called in loops (e.g., calculateConsecutiveWeekends).
+const formattersCache = new Map<string, Intl.DateTimeFormat>();
+function getFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = formattersCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    formattersCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Retorna a chave do fim de semana (Data do Sábado em formato YYYY-MM-DD) para uma data dada.
  * Se for Sábado, retorna o próprio dia. Se for Domingo, retorna o dia anterior (Sábado).
@@ -21,13 +39,7 @@ export interface OverloadBadge {
  */
 export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE): string | null {
   const d = new Date(date);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  const formatter = getFormatter(timeZone);
 
   const parts = formatter.formatToParts(d);
   const weekday = parts.find((p) => p.type === 'weekday')?.value; // 'Sat', 'Sun', 'Mon', etc.
@@ -49,13 +61,7 @@ export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE):
  * Encontra o sábado mais recente no fuso horário local que seja menor ou igual à data de referência.
  */
 function getMostRecentSaturday(referenceDate: Date, timeZone = DEFAULT_TIMEZONE): Date {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  });
+  const formatter = getFormatter(timeZone);
 
   // Iterar regressivamente até 7 dias para encontrar o sábado
   let current = new Date(referenceDate);
