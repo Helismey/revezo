@@ -1,6 +1,39 @@
 import { UserAssignmentTime } from './conflict.js';
 import { DEFAULT_TIMEZONE, getLocalDateString } from './daily-limit.js';
 
+const weekendKeyFormattersCache = new Map<string, Intl.DateTimeFormat>();
+const saturdayFormattersCache = new Map<string, Intl.DateTimeFormat>();
+
+function getWeekendKeyFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = weekendKeyFormattersCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    weekendKeyFormattersCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+function getSaturdayFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = saturdayFormattersCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    saturdayFormattersCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 export interface OverloadAlert {
   isOverloaded: boolean;
   score: number; // 0 a 100
@@ -21,13 +54,7 @@ export interface OverloadBadge {
  */
 export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE): string | null {
   const d = new Date(date);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  const formatter = getWeekendKeyFormatter(timeZone);
 
   const parts = formatter.formatToParts(d);
   const weekday = parts.find((p) => p.type === 'weekday')?.value; // 'Sat', 'Sun', 'Mon', etc.
@@ -49,13 +76,7 @@ export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE):
  * Encontra o sábado mais recente no fuso horário local que seja menor ou igual à data de referência.
  */
 function getMostRecentSaturday(referenceDate: Date, timeZone = DEFAULT_TIMEZONE): Date {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  });
+  const formatter = getSaturdayFormatter(timeZone);
 
   // Iterar regressivamente até 7 dias para encontrar o sábado
   let current = new Date(referenceDate);
