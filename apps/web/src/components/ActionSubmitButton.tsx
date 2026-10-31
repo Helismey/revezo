@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useFormStatus } from 'react-dom';
+import { CircleNotch } from '@/components/Icons';
 
 interface ActionSubmitButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   pendingText?: string;
@@ -26,10 +27,17 @@ export function ActionSubmitButton({
       type="submit"
       disabled={pending || disabled}
       aria-busy={pending}
-      className={`${className} disabled:opacity-60 disabled:cursor-not-allowed`}
+      className={`${className} disabled:opacity-60 disabled:cursor-not-allowed ${pending ? 'flex items-center gap-1.5' : ''}`}
       {...props}
     >
-      {pending ? pendingText : children}
+      {pending ? (
+        <>
+          <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
+          <span>{pendingText}</span>
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }
