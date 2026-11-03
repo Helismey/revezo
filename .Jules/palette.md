@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2026-11-03 - ARIA group and pressed state for toggle buttons
+**Learning:** For toggle buttons that represent a state (like view mode), using `aria-pressed` or grouping them with `role="group"` and `aria-label` ensures screen readers can announce the current state accurately, rather than relying solely on visual CSS changes.
+**Action:** Use `role="group"`, `aria-label`, and `aria-pressed` for custom toggle button groups along with keyboard navigation focus indicators.
