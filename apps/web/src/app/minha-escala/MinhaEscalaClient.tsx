@@ -107,11 +107,16 @@ export function MinhaEscalaClient({
     <div className="space-y-4">
       {/* Barra de alternância de visão */}
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center bg-bg rounded-control p-1 border border-line">
+        <div
+          className="flex items-center bg-bg rounded-control p-1 border border-line"
+          role="group"
+          aria-label="Modos de visualização da escala"
+        >
           <button
             type="button"
             onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 rounded-control text-xs font-semibold transition-all inline-flex items-center gap-1.5 min-h-touch ${
+            aria-pressed={viewMode === 'list'}
+            className={`px-3 py-1.5 rounded-control text-xs font-semibold transition-all inline-flex items-center gap-1.5 min-h-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               viewMode === 'list'
                 ? 'bg-surface text-ink shadow-sm'
                 : 'text-ink-muted hover:text-ink'
@@ -123,7 +128,8 @@ export function MinhaEscalaClient({
           <button
             type="button"
             onClick={() => setViewMode('calendar')}
-            className={`px-3 py-1.5 rounded-control text-xs font-semibold transition-all inline-flex items-center gap-1.5 min-h-touch ${
+            aria-pressed={viewMode === 'calendar'}
+            className={`px-3 py-1.5 rounded-control text-xs font-semibold transition-all inline-flex items-center gap-1.5 min-h-touch focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               viewMode === 'calendar'
                 ? 'bg-surface text-ink shadow-sm'
                 : 'text-ink-muted hover:text-ink'
