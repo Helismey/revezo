@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2026-11-04 - Enhanced ActionSubmitButton accessibility and visual feedback
+**Learning:** For async actions, combining visual feedback (like a spinning `CircleNotch`) with screen reader hints (`aria-busy`) and proper keyboard focus states (`focus-visible:ring-2`) creates a more robust, inclusive interaction model that benefits all users.
+**Action:** Always include a visual loading indicator alongside `aria-busy` for submit buttons, and explicitly style `focus-visible` on custom interactive elements to ensure they are easily operable via keyboard.
