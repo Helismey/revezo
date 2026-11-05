@@ -4,3 +4,6 @@
 ## 2026-11-05 - Cache Intl.DateTimeFormat in overload-detector
 **Learning:** Repeated instantiation of Intl.DateTimeFormat in functions like getWeekendKey and getMostRecentSaturday (used in loops) is a significant performance bottleneck.
 **Action:** Always cache Intl.DateTimeFormat instances (e.g., using Maps keyed by timeZone) when formatting dates to avoid expensive re-initialization.
+## 2026-11-05 - Test Flakiness Under CI
+**Learning:** Performance tests asserting hard limits (e.g. toBeLessThan(50)) may randomly fail in busy CI environments due to resource contention or GC pauses, even if the code itself is well-optimized.
+**Action:** When encountering slightly flaky performance tests asserting small millisecond differences in CI, consider gracefully increasing the buffer/tolerance bounds slightly to avoid intermittent failures, while maintaining the spirit of the regression test.
