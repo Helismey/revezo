@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2025-02-12 - Standardized Async Action Visual Feedback
+**Learning:** Depending solely on text changes (e.g., "Salvando...") for pending Server Action submit buttons is not enough for users to clearly understand that a background process is running, leading to potential confusion or perceived hangs.
+**Action:** Always include a visual loading indicator (e.g., a spinner like `CircleNotch` from Phosphor Icons) alongside pending text in standardized submit components.
