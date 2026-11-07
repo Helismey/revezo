@@ -84,8 +84,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const user = await createTestUser({ churchId: church.id });
       const actor = await createTestUser({ churchId: church.id, globalRole: 'ADMIN_MASTER' });
 
-      const startsAt = new Date('2026-11-01T10:00:00Z');
-      const endsAt = new Date('2026-11-01T12:00:00Z');
+      const startsAt = new Date('2028-11-01T10:00:00Z');
+      const endsAt = new Date('2028-11-01T12:00:00Z');
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: department.id,
@@ -127,8 +127,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const dep2 = await createTestDepartment(church.id, 'Mídia');
       const user = await createTestUser({ churchId: church.id });
 
-      const startsAt1 = new Date('2026-11-01T10:00:00Z');
-      const endsAt1 = new Date('2026-11-01T12:00:00Z');
+      const startsAt1 = new Date('2028-11-01T10:00:00Z');
+      const endsAt1 = new Date('2028-11-01T12:00:00Z');
       const { slot: slot1 } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep1.id,
@@ -143,8 +143,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       });
 
       // Slot 2 na Mídia sobreposto no mesmo horário (11:00 às 13:00)
-      const startsAt2 = new Date('2026-11-01T11:00:00Z');
-      const endsAt2 = new Date('2026-11-01T13:00:00Z');
+      const startsAt2 = new Date('2028-11-01T11:00:00Z');
+      const endsAt2 = new Date('2028-11-01T13:00:00Z');
       const { slot: slot2 } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep2.id,
@@ -175,8 +175,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot: slot1 } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-01T08:00:00Z'),
-        endsAt: new Date('2026-11-01T10:00:00Z'),
+        startsAt: new Date('2028-11-01T08:00:00Z'),
+        endsAt: new Date('2028-11-01T10:00:00Z'),
       });
       await assignMemberWithLock({ slotId: slot1.id, userId: user.id });
 
@@ -184,8 +184,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot: slot2 } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-01T14:00:00Z'),
-        endsAt: new Date('2026-11-01T16:00:00Z'),
+        startsAt: new Date('2028-11-01T14:00:00Z'),
+        endsAt: new Date('2028-11-01T16:00:00Z'),
       });
       await assignMemberWithLock({ slotId: slot2.id, userId: user.id });
 
@@ -193,8 +193,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot: slot3 } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-01T19:00:00Z'),
-        endsAt: new Date('2026-11-01T21:00:00Z'),
+        startsAt: new Date('2028-11-01T19:00:00Z'),
+        endsAt: new Date('2028-11-01T21:00:00Z'),
       });
 
       await expect(
@@ -217,16 +217,16 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
         data: {
           userId: user.id,
           kind: 'UNAVAILABLE_PERIOD',
-          from: new Date('2026-11-01T00:00:00Z'),
-          to: new Date('2026-11-05T23:59:59Z'),
+          from: new Date('2028-11-01T00:00:00Z'),
+          to: new Date('2028-11-05T23:59:59Z'),
         },
       });
 
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-02T10:00:00Z'),
-        endsAt: new Date('2026-11-02T12:00:00Z'),
+        startsAt: new Date('2028-11-02T10:00:00Z'),
+        endsAt: new Date('2028-11-02T12:00:00Z'),
       });
 
       await expect(
@@ -246,8 +246,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot: slotB } = await createTestProgramWithSlot({
         churchId: churchB.id,
         departmentId: depB.id,
-        startsAt: new Date('2026-11-01T10:00:00Z'),
-        endsAt: new Date('2026-11-01T12:00:00Z'),
+        startsAt: new Date('2028-11-01T10:00:00Z'),
+        endsAt: new Date('2028-11-01T12:00:00Z'),
       });
 
       await expect(
@@ -309,16 +309,16 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot: slotA } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: depA.id,
-        startsAt: new Date('2026-11-01T10:00:00Z'),
-        endsAt: new Date('2026-11-01T12:00:00Z'),
+        startsAt: new Date('2028-11-01T10:00:00Z'),
+        endsAt: new Date('2028-11-01T12:00:00Z'),
       });
       await assignMemberWithLock({ slotId: slotA.id, userId: userA.id });
 
       // Consulta o relatório exclusivo do departamento A
       const reportA = await getDepartmentParticipationReport({
         departmentId: depA.id,
-        from: new Date('2026-11-01T00:00:00Z'),
-        to: new Date('2026-11-01T23:59:59Z'),
+        from: new Date('2028-11-01T00:00:00Z'),
+        to: new Date('2028-11-01T23:59:59Z'),
       });
 
       expect(reportA.departments[0].id).toBe(depA.id);
@@ -430,9 +430,9 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const user = await createTestUser({ churchId: church.id });
 
       // Escala para daqui a 7 dias
-      const fixedNow = new Date('2026-11-01T10:00:00Z');
-      const startsAt = new Date('2026-11-08T10:00:00Z');
-      const endsAt = new Date('2026-11-08T12:00:00Z');
+      const fixedNow = new Date('2028-11-01T10:00:00Z');
+      const startsAt = new Date('2028-11-08T10:00:00Z');
+      const endsAt = new Date('2028-11-08T12:00:00Z');
 
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
@@ -515,8 +515,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-05T10:00:00Z'),
-        endsAt: new Date('2026-11-05T12:00:00Z'),
+        startsAt: new Date('2027-11-05T10:00:00Z'),
+        endsAt: new Date('2027-11-05T12:00:00Z'),
       });
 
       const assignment = await assignMemberWithLock({
@@ -592,8 +592,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-10T19:00:00Z'),
-        endsAt: new Date('2026-11-10T21:00:00Z'),
+        startsAt: new Date('2028-11-10T19:00:00Z'),
+        endsAt: new Date('2028-11-10T21:00:00Z'),
       });
 
       // Importa a rota dinamicamente
