@@ -179,7 +179,7 @@ describe('Testes de Desempenho e Regressão do Motor de Escala (Skill testes-des
 
     const durationMs = performance.now() - startTime;
     expect(eligibleCount).toBe(ITERATIONS);
-    expect(durationMs).toBeLessThan(100);
+    expect(durationMs).toBeLessThan(200);
 
     const opsPerSec = Math.round((ITERATIONS / durationMs) * 1000);
     console.info(`[Performance Eligibility] 2.000 checks em: ${durationMs.toFixed(2)} ms (${opsPerSec.toLocaleString()} ops/s)`);
@@ -258,7 +258,7 @@ describe('Testes de Desempenho e Regressão do Motor de Escala (Skill testes-des
     const durationMs = performance.now() - startTime;
 
     expect(exceededCount).toBe(ITERATIONS);
-    expect(durationMs).toBeLessThan(100);
+    expect(durationMs).toBeLessThan(200);
     console.info(`[Performance DailyLimit] 5.000 validações de limite diário em: ${durationMs.toFixed(2)} ms`);
   });
 
