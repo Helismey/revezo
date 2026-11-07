@@ -39,20 +39,12 @@ export async function POST(request: Request) {
       userAgent,
     });
 
-    // Em ambiente de desenvolvimento, logamos o link no terminal para testes locais
-    if (process.env.NODE_ENV !== 'production' && result.rawToken) {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      console.log('----------------------------------------------------');
-      console.log('[DEV] Link para redefinição de senha gerado:');
-      console.log(`${baseUrl}/redefinir-senha?token=${result.rawToken}`);
-      console.log('----------------------------------------------------');
-    }
-
+    // Security Fix: Do not log or leak tokens in the API response, even in development,
+    // to prevent accidental exposure and adhere to secure defaults.
     // Regra 10 e Anti-enumeração: Resposta estritamente idêntica para o cliente
     return NextResponse.json({
       success: true,
       message: 'Se o e-mail informado estiver cadastrado, você receberá um link para redefinir sua senha em instantes.',
-      ...(process.env.NODE_ENV !== 'production' && result.rawToken ? { devToken: result.rawToken } : {}),
     });
   } catch (err: unknown) {
     console.error('Erro na solicitação de redefinição de senha:', err);
