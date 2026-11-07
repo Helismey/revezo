@@ -11,6 +11,7 @@ export default function EsqueciSenhaPage() {
   const [feedback, setFeedback] = useState<{
     type: 'sucesso' | 'erro' | 'advertencia' | 'info';
     message: string;
+    devToken?: string;
   } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,6 +39,7 @@ export default function EsqueciSenhaPage() {
       setFeedback({
         type: 'sucesso',
         message: data.message || 'Se o e-mail informado estiver cadastrado, você receberá um link para redefinir sua senha em instantes.',
+        devToken: data.devToken,
       });
       setEmail('');
     } catch {
@@ -66,6 +68,19 @@ export default function EsqueciSenhaPage() {
         {feedback && (
           <div className="mb-6 space-y-3">
             <AlertBanner type={feedback.type} message={feedback.message} />
+
+            {feedback.devToken && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-control text-xs text-amber-900 dark:text-amber-200">
+                <span className="font-bold block mb-1">Ambiente de Testes (Dev):</span>
+                <p className="mb-2">Link direto para redefinição:</p>
+                <Link
+                  href={`/redefinir-senha?token=${feedback.devToken}`}
+                  className="font-mono underline break-all text-primary font-semibold"
+                >
+                  /redefinir-senha?token={feedback.devToken}
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
