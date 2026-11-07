@@ -10,7 +10,7 @@ export const createSwapRequestSchema = z.object({
 export const respondSwapRequestSchema = z.object({
   swapRequestId: z.string().min(1, 'ID do pedido de troca é obrigatório'),
   action: z.enum(['ACCEPT', 'REJECT'], {
-    errorMap: () => ({ message: 'Ação deve ser ACEITAR ou RECUSAR' }),
+    message: 'Ação deve ser ACEITAR ou RECUSAR'
   }),
   reason: z.string().max(300, 'Motivo deve ter no máximo 300 caracteres').optional(),
 });
@@ -18,7 +18,7 @@ export const respondSwapRequestSchema = z.object({
 export const reviewSwapRequestSchema = z.object({
   swapRequestId: z.string().min(1, 'ID do pedido de troca é obrigatório'),
   action: z.enum(['APPROVE', 'REJECT'], {
-    errorMap: () => ({ message: 'Ação deve ser APROVAR ou REJEITAR' }),
+    message: 'Ação deve ser APROVAR ou REJEITAR'
   }),
   notes: z.string().max(300, 'Observações devem ter no máximo 300 caracteres').optional(),
 });

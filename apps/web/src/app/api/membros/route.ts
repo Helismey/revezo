@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.errors[0]?.message || 'Dados inválidos' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Dados inválidos' },
         { status: 400 }
       );
     }
@@ -74,7 +74,7 @@ export async function PUT(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.errors[0]?.message || 'Dados inválidos' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Dados inválidos' },
         { status: 400 }
       );
     }
