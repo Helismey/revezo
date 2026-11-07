@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2024-11-07 - [ActionSubmitButton Loading & Focus States]
+**Learning:** Adding a loading spinner to the shared `ActionSubmitButton` component prevents double submissions and provides immediate feedback during server actions. Also, applying explicit `focus-visible` outline styles ensures the button is accessible via keyboard navigation.
+**Action:** When creating new interactive elements, ensure they have proper loading states (e.g., `CircleNotch`) and explicit focus indicators (`focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1`).
