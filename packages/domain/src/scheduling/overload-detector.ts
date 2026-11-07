@@ -1,6 +1,22 @@
 import { UserAssignmentTime } from './conflict.js';
 import { DEFAULT_TIMEZONE, getLocalDateString } from './daily-limit.js';
 
+const formattersCache = new Map<string, Intl.DateTimeFormat>();
+
+function getDateTimeFormatter(
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  // We use a simple JSON stringify of options + timezone as cache key
+  const key = `${timeZone}-${JSON.stringify(options)}`;
+  let formatter = formattersCache.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', { ...options, timeZone });
+    formattersCache.set(key, formatter);
+  }
+  return formatter;
+}
+
 export interface OverloadAlert {
   isOverloaded: boolean;
   score: number; // 0 a 100
@@ -21,8 +37,7 @@ export interface OverloadBadge {
  */
 export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE): string | null {
   const d = new Date(date);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
+  const formatter = getDateTimeFormatter(timeZone, {
     weekday: 'short',
     year: 'numeric',
     month: '2-digit',
@@ -49,8 +64,7 @@ export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE):
  * Encontra o sábado mais recente no fuso horário local que seja menor ou igual à data de referência.
  */
 function getMostRecentSaturday(referenceDate: Date, timeZone = DEFAULT_TIMEZONE): Date {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
+  const formatter = getDateTimeFormatter(timeZone, {
     weekday: 'short',
     year: 'numeric',
     month: 'numeric',
