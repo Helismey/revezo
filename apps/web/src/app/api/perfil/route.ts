@@ -104,7 +104,7 @@ export async function PUT(request: Request) {
     const parsed = updateMemberSchema.safeParse(body);
 
     if (!parsed.success) {
-      const firstError = parsed.error.errors[0]?.message || 'Verifique os dados preenchidos.';
+      const firstError = parsed.error.issues[0]?.message || 'Verifique os dados preenchidos.';
       return NextResponse.json({ success: false, error: firstError }, { status: 400 });
     }
 

@@ -37,7 +37,7 @@ describe('Fase 2: Contratos Zod de Igrejas, Atribuições e Hierarquia', () => {
       const result = createChurchSchema.safeParse(invalid);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toContain('mínimo 3 caracteres');
+        expect(result.error.issues[0]?.message).toContain('mínimo 3 caracteres');
       }
     });
 

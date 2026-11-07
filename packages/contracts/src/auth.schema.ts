@@ -65,7 +65,7 @@ export const registerSchema = z
     guardianName: z.string().trim().max(100).optional(),
     guardianPhone: z.string().trim().regex(phoneRegex, 'Telefone do responsável deve estar no padrão internacional (+55...)').optional().or(z.literal('')),
     termsAccepted: z.literal(true, {
-      errorMap: () => ({ message: 'Você precisa aceitar os termos de privacidade para continuar' }),
+      error: 'Você precisa aceitar os termos de privacidade para continuar'
     }),
   })
   .superRefine((val, ctx) => {
