@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const parsed = addUnavailablePeriodSchema.safeParse(body);
 
     if (!parsed.success) {
-      const firstError = parsed.error.errors[0]?.message || 'Dados inválidos.';
+      const firstError = parsed.error.issues[0]?.message || 'Dados inválidos.';
       return NextResponse.json({ success: false, error: firstError }, { status: 400 });
     }
 
@@ -69,7 +69,7 @@ export async function DELETE(request: Request) {
     const parsed = removeUnavailablePeriodSchema.safeParse(body);
 
     if (!parsed.success) {
-      const firstError = parsed.error.errors[0]?.message || 'Dados inválidos.';
+      const firstError = parsed.error.issues[0]?.message || 'Dados inválidos.';
       return NextResponse.json({ success: false, error: firstError }, { status: 400 });
     }
 

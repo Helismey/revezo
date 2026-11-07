@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     const parsed = participationReportQuerySchema.safeParse(query);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.errors[0]?.message || 'Parâmetros inválidos' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Parâmetros inválidos' },
         { status: 400 }
       );
     }
