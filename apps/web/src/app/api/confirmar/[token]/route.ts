@@ -107,7 +107,7 @@ export async function POST(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.errors[0]?.message || 'Dados inválidos' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Dados inválidos' },
         { status: 400 }
       );
     }

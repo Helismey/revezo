@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: parsed.error.errors[0]?.message || 'E-mail inválido.',
+          error: parsed.error.issues[0]?.message || 'E-mail inválido.',
         },
         { status: 400 }
       );
