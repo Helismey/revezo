@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2024-05-18 - Visual Loading Feedback for Action Buttons
+**Learning:** We had an `ActionSubmitButton` component used across forms and lists (like confirming volunteer assignments) that correctly disabled itself on submit but offered no explicit loading animation, leaving the user visually disconnected from the "processing" state. The internal UI uses `@phosphor-icons/react`'s `CircleNotch` combined with Tailwind `animate-spin` for standard loading scenarios.
+**Action:** Always inject standard loading indicators into global wrapper components (like `ActionSubmitButton`) if they aren't explicitly provided by the caller but the state is known, to provide universally consistent and immediate visual feedback on asynchronous actions.
