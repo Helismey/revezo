@@ -26,7 +26,7 @@ export const safeImageUrlSchema = z
 
 export const updateChurchSettingsSchema = z.object({
   churchId: z.string().optional(),
-  name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100),
+  name: z.string().trim().min(3, { message: 'Nome da igreja deve ter no mínimo 3 caracteres' }).max(100),
   logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB'),
   secondaryColor: z.string().regex(hexColorRegex, 'Cor secundária deve estar no formato #RRGGBB'),
@@ -37,7 +37,7 @@ export const updateChurchSettingsSchema = z.object({
 export type UpdateChurchSettingsInput = z.infer<typeof updateChurchSettingsSchema>;
 
 export const createChurchSchema = z.object({
-  name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100),
+  name: z.string().trim().min(3, { message: 'Nome da igreja deve ter no mínimo 3 caracteres' }).max(100),
   slug: z.string().trim().min(3).max(50).regex(/^[a-z0-9-]+$/, 'Slug deve conter apenas letras minúsculas, números e hífens'),
   logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB').default('#1E40AF'),
@@ -51,7 +51,7 @@ export type CreateChurchInput = z.infer<typeof createChurchSchema>;
 
 export const updateChurchSchema = z.object({
   churchId: z.string().min(1, 'ID da igreja é obrigatório'),
-  name: z.string().trim().min(3, 'Nome da igreja deve ter no mínimo 3 caracteres').max(100).optional(),
+  name: z.string().trim().min(3, { message: 'Nome da igreja deve ter no mínimo 3 caracteres' }).max(100).optional(),
   slug: z.string().trim().min(3).max(50).regex(/^[a-z0-9-]+$/, 'Slug deve conter apenas letras minúsculas, números e hífens').optional(),
   logoUrl: safeImageUrlSchema.optional().nullable().or(z.literal('')),
   primaryColor: z.string().regex(hexColorRegex, 'Cor primária deve estar no formato #RRGGBB').optional(),
