@@ -14,6 +14,19 @@ export interface OverloadBadge {
   variant: 'danger' | 'warning' | 'ok';
 }
 
+// Cache instâncias de Intl.DateTimeFormat para evitar recriação custosa (impacto de performance em loops)
+const formattersCache = new Map<string, Intl.DateTimeFormat>();
+
+function getDateTimeFormatter(timeZone: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const cacheKey = `${timeZone}-${JSON.stringify(options)}`;
+  let formatter = formattersCache.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', options);
+    formattersCache.set(cacheKey, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Retorna a chave do fim de semana (Data do Sábado em formato YYYY-MM-DD) para uma data dada.
  * Se for Sábado, retorna o próprio dia. Se for Domingo, retorna o dia anterior (Sábado).
@@ -21,7 +34,7 @@ export interface OverloadBadge {
  */
 export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE): string | null {
   const d = new Date(date);
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const formatter = getDateTimeFormatter(timeZone, {
     timeZone,
     weekday: 'short',
     year: 'numeric',
@@ -49,7 +62,7 @@ export function getWeekendKey(date: Date | string, timeZone = DEFAULT_TIMEZONE):
  * Encontra o sábado mais recente no fuso horário local que seja menor ou igual à data de referência.
  */
 function getMostRecentSaturday(referenceDate: Date, timeZone = DEFAULT_TIMEZONE): Date {
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const formatter = getDateTimeFormatter(timeZone, {
     timeZone,
     weekday: 'short',
     year: 'numeric',
