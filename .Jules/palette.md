@@ -14,3 +14,6 @@
 ## 2024-10-24 - Accessible Modal and ConfirmDialog enhancements
 **Learning:** Adding explicit programmatic links between `<label>` and `<input>` using `useId()` and explicit `focus-visible` styles on buttons drastically improves accessibility for keyboard and screen reader users within dialog components.
 **Action:** Next time creating inputs or interactive modals, always use `useId()` for dynamic IDs to link inputs and labels, and include explicit `focus-visible` states (like `focus:outline-none focus-visible:ring-2`) for all interactive elements.
+## 2025-02-12 - Accessible Loading Spinners in Buttons
+**Learning:** When adding purely visual loading indicators (like a spinner icon) to interactive elements such as buttons, ensure accessibility by adding `aria-hidden="true"` to the visual icon and relying on attributes like `aria-busy="true"` on the parent element for screen readers.
+**Action:** Next time adding decorative icons or loading spinners to buttons, hide them from screen readers using `aria-hidden="true"` while maintaining state announcements via parent attributes.
