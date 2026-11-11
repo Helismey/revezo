@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.errors[0]?.message || 'Dados inválidos' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Dados inválidos' },
         { status: 400 }
       );
     }
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Erro ao autenticar cliente mobile';
+    console.error("AUTH ERROR", err); const msg = err instanceof Error ? err.message : 'Erro ao autenticar cliente mobile';
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

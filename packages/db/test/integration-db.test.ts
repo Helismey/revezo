@@ -218,7 +218,7 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
           userId: user.id,
           kind: 'UNAVAILABLE_PERIOD',
           from: new Date('2026-11-01T00:00:00Z'),
-          to: new Date('2026-11-05T23:59:59Z'),
+          to: new Date('2030-11-05T23:59:59Z'),
         },
       });
 
@@ -515,8 +515,8 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-05T10:00:00Z'),
-        endsAt: new Date('2026-11-05T12:00:00Z'),
+        startsAt: new Date('2030-11-05T10:00:00Z'),
+        endsAt: new Date('2030-11-05T12:00:00Z'),
       });
 
       const assignment = await assignMemberWithLock({
