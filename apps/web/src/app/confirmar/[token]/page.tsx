@@ -30,7 +30,7 @@ export default async function ConfirmarPage({
     .catch(() => defaultChurchInfo);
 
   const verificationPromise =
-    process.env.NODE_ENV !== 'production' && token === 'e2e-token-valido-teste'
+    process.env.ALLOW_E2E_MOCK_TOKENS === 'true' && token === 'e2e-token-valido-teste'
       ? Promise.resolve().then(() => {
           const mockStartsAt = new Date(Date.now() + 86400000 * 3);
           const mockEndsAt = new Date(mockStartsAt.getTime() + 7200000);

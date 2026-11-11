@@ -6,3 +6,8 @@
 **Vulnerability:** A CSRF check was implemented as `if (sourceToVerify && !isAllowedOrigin(sourceToVerify, host))` which bypassed the check entirely if both `Origin` and `Referer` headers were completely missing (e.g. suppressed by `<meta name="referrer" content="no-referrer">`).
 **Learning:** Truthy checks on the variable holding the headers are dangerous because they can evaluate to false and skip the subsequent negative checks when the headers are actively stripped by an attacker.
 **Prevention:** Always fail-closed on missing origin headers for mutating requests unless a custom header (like `x-requested-with`) is present which confirms it is an API client unable to be spoofed by cross-origin browser requests.
+
+## 2024-05-24 - [E2E Test Backdoor Exposure]
+**Vulnerability:** A hardcoded mock token ('e2e-token-valido-teste') for E2E testing was accessible based merely on `NODE_ENV !== 'production'`.
+**Learning:** Relying on `NODE_ENV !== 'production'` can inadvertently expose test backdoors if environments like staging or local deployments are misconfigured. It doesn't follow the principle of least privilege.
+**Prevention:** Use specific, explicit environment variables (e.g., `ALLOW_E2E_MOCK_TOKENS=true`) designed solely to enable such backdoors rather than relying on generic environment flags.
