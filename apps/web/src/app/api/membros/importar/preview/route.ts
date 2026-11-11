@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       if (validation.success) {
         validRows.push(validation.data);
       } else {
-        const errorMessages = validation.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+        const errorMessages = validation.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
         invalidRows.push({
           index: i + 1,
           data: mapped,
