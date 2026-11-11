@@ -512,11 +512,12 @@ describe('Testes de Integração com Banco de Dados Real (PostgreSQL)', () => {
       const dep = await createTestDepartment(church.id);
       const user = await createTestUser({ churchId: church.id });
 
+      const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const { slot } = await createTestProgramWithSlot({
         churchId: church.id,
         departmentId: dep.id,
-        startsAt: new Date('2026-11-05T10:00:00Z'),
-        endsAt: new Date('2026-11-05T12:00:00Z'),
+        startsAt: futureDate,
+        endsAt: new Date(futureDate.getTime() + 2 * 60 * 60 * 1000),
       });
 
       const assignment = await assignMemberWithLock({

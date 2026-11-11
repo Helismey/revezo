@@ -13,8 +13,8 @@ export const consumeConfirmationTokenSchema = z.object({
     .min(32, 'Token inválido')
     .max(128, 'Token inválido'),
   action: z.enum(['CONFIRM', 'DECLINE'], {
-    errorMap: () => ({ message: 'Ação deve ser CONFIRM ou DECLINE' }),
-  }),
+    errorMap: () => ({ message: 'Ação deve ser CONFIRM ou DECLINE' })
+  } as any),
   reason: z.string().max(200, 'Motivo deve ter no máximo 200 caracteres').optional(),
 });
 
