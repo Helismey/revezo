@@ -41,14 +41,14 @@ export type UnsubscribePushInput = z.infer<typeof unsubscribePushSchema>;
 
 export const updateFeatureFlagSchema = z.object({
   key: z.string().min(1, 'Chave da flag obrigatória'),
-  enabled: z.boolean({ required_error: 'O estado da flag (ativada/desativada) é obrigatório' }),
+  enabled: z.boolean({ message: 'O estado da flag (ativada/desativada) é obrigatório' }),
 });
 
 export type UpdateFeatureFlagInput = z.infer<typeof updateFeatureFlagSchema>;
 
 export const sendTestNotificationSchema = z.object({
   channel: z.enum(['WHATSAPP', 'EMAIL', 'PUSH', 'SMS'], {
-    errorMap: () => ({ message: 'Canal inválido. Escolha WHATSAPP, EMAIL, PUSH ou SMS.' }),
+    message: 'Canal inválido. Escolha WHATSAPP, EMAIL, PUSH ou SMS.',
   }),
   targetUserId: z.string().min(1, 'Usuário de destino obrigatório'),
 });
